@@ -1,0 +1,31 @@
+{
+    "version": 3,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 19,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "release",
+            "displayName": "Windows x64 release",
+            "description": "Sets Visual Studio 17 2022 generator, compilers, x64 architecture, build and install directory, debug build type",
+            "generator": "Visual Studio 17 2022",
+            "binaryDir": "./build/release",
+            "architecture": {
+                "value": "x64",
+                "strategy": "external"
+            },
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+                
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "build-base",
+            "configurePreset": "release"
+        }
+    ]
+}
