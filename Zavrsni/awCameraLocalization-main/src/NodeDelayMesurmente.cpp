@@ -81,6 +81,7 @@ void NodeDelayMesurmente::drawNodeParams(){
     }
     if (ImGui::Button("TEST")) {
         this->startTest=true;
+        this->lineTime=Util::timeSinceEpochMicroseconds();
     }
     if (this->isConnected()){
         ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
@@ -465,6 +466,14 @@ void NodeDelayMesurmente::recieve(std::shared_ptr<MessageBase> message, int conn
     if(connector->connectorMessageType == Enums::MessageType::PICTURE){
         std::shared_ptr<Message<std::shared_ptr<std::pair<cv::Mat, cv::Mat>>>> msg = std::dynamic_pointer_cast<Message<std::shared_ptr<std::pair<cv::Mat, cv::Mat>>>>(message);
         
+        
+        this->mutex.lock();
+        if(this->startTest && !this->isConnected()){
+            this->connect(this->port,this->baudRate);
+        }
+        this->mutex.unlock();
+        
+        
         //printf("Message came\n");
         this->mutex.lock();
         this->resolution[0]=msg->data->first.cols;
@@ -521,9 +530,10 @@ void NodeDelayMesurmente::recieve(std::shared_ptr<MessageBase> message, int conn
         // cv::imshow("blobs",msg->data->second);
         // cv::waitKey(1);
         if(this->startTest){
-            Util::delay(50);
-            this->initiateTest(msg->data->second);
-            this->test_timer=NULL;
+            if(this->isConnected()){
+                this->initiateTest(msg->data->second);
+                this->test_timer=NULL;
+            }
         }
         else if (this->isPeriodicTest){
             if (this->test_timer==NULL) this->test_timer = Util::timeSinceEpochMicroseconds();
@@ -531,6 +541,7 @@ void NodeDelayMesurmente::recieve(std::shared_ptr<MessageBase> message, int conn
                 long long int cTime=Util::timeSinceEpochMicroseconds();
                 int timeSinceLastT = (cTime - this->test_timer)/1000000; //sec
                 if(timeSinceLastT>=this->test_period){
+                    this->lineTime=Util::timeSinceEpochMicroseconds();
                     this->startTest=true;
                 }
             }
@@ -599,6 +610,7 @@ bool NodeDelayMesurmente::testDelay(cv::Mat image){
             this->isTesting=false;
             this->startTest=false;
             printf("Time limit (No Detection in %d ms)!!!", this->maxTime);
+            // this->disconnect();
             return false;
         }
         else
@@ -610,6 +622,7 @@ bool NodeDelayMesurmente::testDelay(cv::Mat image){
             return true;
         }
     }
+    return false;
 
 }
 
@@ -617,7 +630,7 @@ void NodeDelayMesurmente::initiateTest(cv::Mat image){
     if(this->sentRequest){
         if(this->response){
             bool test = this->testDelay(image);
-            if(test && this->useAvg){
+            if(test && this->useAvg){ //will not happen wasnt implemented. always false
                 this->last_Delays[this->numOfftests]=this->lastDelay;
                 this->numOfftests++;
                 if(this->numOfftests<sizeof(this->last_Delays)/sizeof(last_Delays[0])){
@@ -641,10 +654,11 @@ void NodeDelayMesurmente::initiateTest(cv::Mat image){
                 delayMsg->data = this->lastDelay;
                 for(auto& connector : this->connectors) {
                     if(connector->connectorMessageType == Enums::MessageType::INT) {
-                        printf("Found INT connector, sending... %d\n",delayMsg->data);
+                        // printf("Found INT connector, sending... %d\n",delayMsg->data);
                         this->send(delayMsg, connector);
                     }
                 }
+                
                
             }
             if(!this->isTesting){
@@ -652,6 +666,8 @@ void NodeDelayMesurmente::initiateTest(cv::Mat image){
                 this->startTest = false;
                 this->response = false;
                 this->ledOn=false;
+                this->disconnect();
+                Util::delay(20);
             }
         }
         else{
@@ -665,6 +681,7 @@ void NodeDelayMesurmente::initiateTest(cv::Mat image){
                     this->startTest = false;
                     this->response = false;
                     printf("Timed Out (No Response in %d ms)!!!",this->timeOut);
+                    this->disconnect();
                 }
             }
         }
@@ -695,6 +712,7 @@ bool NodeDelayMesurmente::connect(std::string port, unsigned int baud) {
     } catch (const boost::system::system_error& e) {
         std::cerr << "Error connecting to serial port: " << e.what() << std::endl;
         this->serial.reset();
+        // Util::delay(150);
         return false;
     }
 }
@@ -709,6 +727,17 @@ void NodeDelayMesurmente::disconnect() {
 
 bool NodeDelayMesurmente::isConnected(){
     return this->serial && this->serial->is_open();
+}
+
+bool NodeDelayMesurmente::isPortAvailable(std::string port) {
+    try {
+        boost::asio::io_context io;
+        boost::asio::serial_port test_port(io);
+        test_port.open(port);
+        return false; // If open succeeds, port is in use
+    } catch (...) {
+        return true; // Port is available
+    }
 }
 
 void NodeDelayMesurmente::sendData(std::string data) {

@@ -11,6 +11,7 @@
 #include <boost/asio.hpp>
 
 class NodeDelayMesurmente : public NodeBase{
+
 public:
     GLuint texture = 0;
 
@@ -34,6 +35,7 @@ public:
 
     long long int startTime = NULL;
     long long int currentTime = NULL;
+    long long int lineTime = NULL;
     int lastBlobCount = NULL;
     int interval = NULL;
     int lastDelay = 0;
@@ -94,6 +96,7 @@ public:
     void disconnect(); //disconects from serial
     bool isConnected(); //checks if serial is conected
     void sendData(std::string data); //sends string msg to serial
+    bool isPortAvailable(std::string port);
     bool readData(); //reads data from serial
 
     void recieve(std::shared_ptr<MessageBase> message, int connectorId) override;

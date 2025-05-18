@@ -23,6 +23,7 @@ namespace Enums{
     enum class MessageType{
         INT,
         FLOAT,
+        BOOL,
         PICTURE,
         BLOB,
         BLOBGROUP,
