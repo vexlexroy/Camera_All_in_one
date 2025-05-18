@@ -2670,6 +2670,20 @@ void NodeManualExtrinsic::drawNodeWork(){
             }
         }
 
+        
+        
+
+
+        
+
+
+
+        
+
+        
+        
+
+
 
         if((this->currFrameRelation != nullptr) && (this->cam1_2D_updated == true) && (this->cam2_2D_updated == true) && !GlobalParams::getInstance().getWorldFrame().empty())
         {
@@ -2797,9 +2811,6 @@ void NodeManualExtrinsic::recieve(std::shared_ptr<MessageBase> message, int conn
     if((connector->connectorMessageType == Enums::MessageType::PICTURE) && !this->isShiftPresed){
         std::shared_ptr<Message<std::shared_ptr<std::pair<cv::Mat, cv::Mat>>>> msg = std::dynamic_pointer_cast<Message<std::shared_ptr<std::pair<cv::Mat, cv::Mat>>>>(message);
         
-        this->resolution[0]=msg->data->first.cols;
-        this->resolution[1]=msg->data->first.rows;
-
         if(msg->camOrigin->frameNickName == this->externalCalibrationPair.first)
         {
             //this->firstCamMsg = msg;
