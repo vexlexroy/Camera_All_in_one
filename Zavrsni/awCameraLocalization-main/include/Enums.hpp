@@ -10,7 +10,8 @@ namespace Enums{
         NODEBLOBCREATOR,
         NODEBLOBGROUPER,
         NODEMANUALEXTRINSIC,
-        NODEDELAYMESURMENTE
+        NODEDELAYMESURMENTE,
+        NODEARUCOTRACKING
     };
 
     enum class ConnectorDirection{

@@ -87,6 +87,7 @@ set(SOURCES
     src/NodeBlobGrouper.cpp
     src/NodeManualExtrinsic.cpp
     src/NodeDelayMesurmente.cpp
+    src/NodeArucoTracking.cpp
 
     #src/SimpleClass.cpp
     #src/AwGui.cpp

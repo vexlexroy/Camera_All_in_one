@@ -16,6 +16,7 @@
 #include "NodeManualExtrinsic.hpp"
 #include "NodeDelayMesurmente.hpp"
 #include "Structs.hpp"
+#include "NodeArucoTracking.hpp"
 
 
 #include <vector>
@@ -39,6 +40,7 @@ ElementFactory::ElementFactory(){ //NODE menue
     availableNodes.push_back(std::make_shared<NodeBlobGrouper>(-1));
     availableNodes.push_back(std::make_shared<NodeManualExtrinsic>(-1));
     availableNodes.push_back(std::make_shared<NodeDelayMesurmente>(-1));
+    availableNodes.push_back(std::make_shared<NodeArucoTracking>(-1));
 
     printf("+ElementFactory(%d nodes added)\n", (int)availableNodes.size());
 }

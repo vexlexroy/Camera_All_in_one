@@ -1,0 +1,292 @@
+#include "NodeArucoTracking.hpp"
+#include "NodeBase.hpp"
+#include "Enums.hpp"
+#include "ElementFactory.hpp"
+#include "Message.hpp"
+#include "ConnectorBase.hpp"
+#include "Util.hpp"
+#include "GlobalParams.hpp"
+
+
+
+#include <memory>
+#include <vector>
+#include <iostream>
+#include <imgui.h>
+#include <opencv2/core/matx.hpp>
+#include <algorithm>
+
+NodeArucoTracking::NodeArucoTracking(int uniqueId) : NodeBase(uniqueId){
+    this->nodeType = Enums::NodeType::NODEARUCOTRACKING;
+}
+
+std::shared_ptr<NodeBase> NodeArucoTracking::createNewClassInstance(int uniqueId){
+    return std::make_shared<NodeArucoTracking>(uniqueId);
+}
+
+
+
+std::vector<Enums::MessageType> NodeArucoTracking::getInMessageTypes(){
+    std::vector<Enums::MessageType> inMessageTypes;
+    inMessageTypes.push_back(Enums::MessageType::PICTURE);
+
+    return inMessageTypes;
+}
+
+
+
+std::vector<Enums::MessageType> NodeArucoTracking::getOutMessageTypes(){
+    std::vector<Enums::MessageType> outMessageTypes;
+    
+    return outMessageTypes;
+}
+
+
+std::string NodeArucoTracking::getDescription(){
+    return "This node does aruco tracking acros multiple cameras";
+}
+
+std::string NodeArucoTracking::getName(){
+    return "Node-aruco-tracking";
+}
+
+Enums::NodeType NodeArucoTracking::getType(){
+    return Enums::NodeType::NODEARUCOTRACKING;
+}
+
+void NodeArucoTracking::drawNodeParams(){
+    
+   
+}
+
+void NodeArucoTracking::drawNodeWork(){
+    this->mutex.lock();
+    if(this->lastMsg == nullptr){
+        ImGui::PushItemWidth(100);
+        this->drawDropdownSelector();
+        ImGui::PopItemWidth();
+        this->mutex.unlock();
+        return;
+    }
+    // get all opend streams and draw dropdown
+    ImGui::PushItemWidth(100);
+    this->drawDropdownSelector();
+    ImGui::PopItemWidth();
+
+    //Tu update napraviti tako da se uzima freezed frame ako treba...
+    Util::mat2Texture(this->lastMsg->first, this->lastMsg->second, this->texture); // if freezed -> update....
+
+    //printf("texture id = %d\n", this->texture);
+    
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
+    //ImGui::ImageButton()
+    if (ImGui::ImageButton("", (ImTextureID)(intptr_t)this->texture, ImVec2(this->resolution[0]*GlobalParams::getInstance().getZoom().scaleFactor, this->resolution[1]*GlobalParams::getInstance().getZoom().scaleFactor))){
+        ImGui::OpenPopup("choose range");
+    }
+    ImGui::PopStyleColor();
+    if (ImGui::BeginPopup("choose range")){
+        ImGui::SeparatorText("choose range");
+        ImGuiIO& io = ImGui::GetIO();
+
+        ImVec2 pos = ImGui::GetCursorScreenPos();
+
+        int pictureX = io.MousePos.x - pos.x;
+        int pictureY = io.MousePos.y - pos.y;
+        
+        ImVec2 zoom_T = ImVec2(((float)(pictureX))/this->resolution[0],((float)(pictureY))/this->resolution[1]);
+        zoom_T.x = this->zoom_A.x + zoom_T.x * (this->zoom_B.x - this->zoom_A.x);
+        zoom_T.y = this->zoom_A.y + zoom_T.y * (this->zoom_B.y - this->zoom_A.y);
+
+        //Window mora biti hoveran, keyShift mor
+        bool windowHovered = false;
+        bool shiftHolded = false;
+        bool shiftClicked = false;
+        bool zoomWheelMoved = false;
+        float zoomLevel = this->zoom_B.x - this->zoom_A.x;
+
+
+        if((zoom_T.x >= 0) && (zoom_T.x <= 1) && (zoom_T.y >= 0) && (zoom_T.y <= 1))
+        {
+            windowHovered = true;
+        }
+
+        if (ImGui::GetIO().KeyShift) 
+        {
+            if(this->isShiftPresed == false)
+            {
+                shiftClicked = true;
+            }
+            this->isShiftPresed = true;
+            shiftHolded = true;
+        }
+        else{
+            this->isShiftPresed = false;
+        }
+
+        if(ImGui::GetIO().MouseWheel != 0.0f)
+        {
+            zoomWheelMoved = true;
+        }
+
+        if(windowHovered && shiftClicked) // freeze the image
+        {
+            freezeFrameFlag = true;
+            //this->freezedFrame =  hsvFrame.clone();
+            //printf("Freeze!\n");
+        }
+
+        if(windowHovered && shiftHolded && zoomWheelMoved)
+        {
+            if ((ImGui::GetIO().MouseWheel > 0.0f) && (zoomLevel > 0.05)) { // zoom in critera
+
+                //By how much will i zoom in/out -> every zoom in i zoom by tenth of previous value
+
+                zoomLevel = zoomLevel * 0.9;
+
+                //Recalculate new zoom level
+                zoom_A.x = zoom_T.x - zoomLevel * ((zoom_T.x - zoom_A.x)/(zoom_B.x - zoom_A.x)); // zoom_A.x = zoom_T.x - zoom_T.x*zoomLevel;
+                zoom_B.x = zoom_A.x + zoomLevel;
+
+                zoom_A.y = zoom_T.y - zoomLevel * ((zoom_T.y - zoom_A.y)/(zoom_B.y - zoom_A.y)); // zoom_A.y = zoom_T.y - zoom_T.y*zoomLevel;
+                zoom_B.y = zoom_A.y + zoomLevel;
+
+
+                //printf("Scrool up, zoomLevel = %.2f\n", zoomLevel);
+                //printf("zoom_T = %.2f, %.2f\n", zoom_T.x, zoom_T.y);
+                //printf("zoom_A = %.2f, %.2f\n", zoom_A.x, zoom_A.y);
+                //printf("zoom_B = %.2f, %.2f\n", zoom_B.x, zoom_B.y);
+
+            } else { // zoom out criteria
+                //printf("Scrool down\n");
+                zoomLevel = zoomLevel * 1.1;
+                if(zoomLevel > 1)
+                {
+                    zoomLevel = 1;
+                }
+
+                zoom_A.x = zoom_T.x - zoomLevel * ((zoom_T.x - zoom_A.x)/(zoom_B.x - zoom_A.x)); // zoom_A.x = zoom_T.x - zoom_T.x*zoomLevel;
+                zoom_B.x = zoom_A.x + zoomLevel;
+
+                zoom_A.y = zoom_T.y - zoomLevel * ((zoom_T.y - zoom_A.y)/(zoom_B.y - zoom_A.y)); // zoom_A.y = zoom_T.y - zoom_T.y*zoomLevel;
+                zoom_B.y = zoom_A.y + zoomLevel;
+
+                //provjeriti granice... i pomaknuti ih u skladu....
+                if(zoom_A.x < 0)
+                {
+                    zoom_B.x += -zoom_A.x;
+                    zoom_A.x = 0;
+                }
+                
+                if(zoom_B.x > 1)
+                {
+                    zoom_A.x -= zoom_B.x - 1;
+                    zoom_B.x = 1;
+                }
+
+                if(zoom_A.y < 0)
+                {
+                    zoom_B.y += -zoom_A.y;
+                    zoom_A.y = 0;
+                }
+                if(zoom_B.y > 1)
+                {
+                    zoom_A.y -= zoom_B.y - 1;
+                    zoom_B.y = 1;
+                }
+
+            }
+        }
+        
+        //T scaled cordinates must stay consistant -> if there is scaling -> it must be updated to represent correct value
+        //This should be correct texture
+        Util::mat2Texture(this->lastMsg->first, this->lastMsg->second, this->selectTexture);
+        ImGui::Image((ImTextureID)(intptr_t)this->selectTexture, ImVec2(this->resolution[0], this->resolution[1]), this->zoom_A, this->zoom_B);
+        
+        ImGui::EndPopup();
+    }
+
+    
+
+    this->mutex.unlock();
+    return;
+}
+
+
+
+void NodeArucoTracking::recieve(std::shared_ptr<MessageBase> message, int connectorId){
+    std::shared_ptr<ConnectorBase> connector = this->getConnector(connectorId);
+    if(connector->connectorMessageType == Enums::MessageType::PICTURE){
+        std::shared_ptr<Message<std::shared_ptr<std::pair<cv::Mat, cv::Mat>>>> msg = std::dynamic_pointer_cast<Message<std::shared_ptr<std::pair<cv::Mat, cv::Mat>>>>(message);
+        this->resolution[0]=msg->data->first.cols;
+        this->resolution[1]=msg->data->first.rows;
+        std::string camName = msg->camOrigin->frameNickName;
+
+        this->mutex.lock();
+        if(!this->isShiftPresed)
+        {
+            if(msg->camOrigin->frameNickName == this->selectedCameraName){
+                this->lastMsg = std::make_unique<std::pair<cv::Mat, cv::Mat>>(std::make_pair<cv::Mat, cv::Mat>(msg->data->first.clone(), msg->data->second.clone())); // nije međudretveno sigurno
+            }
+            else{
+                std::cout << "sel: " << this->selectedCameraName << "got: " << msg->camOrigin->frameNickName << "\n";
+            }
+
+        }
+        this->mutex.unlock();  
+    }
+    
+}
+
+void NodeArucoTracking::drawDropdownSelector(){
+    // printf("1");
+    // Get all active camera frames
+    std::vector<std::shared_ptr<FrameCam>> camFrames = GlobalParams::getInstance().getCamFrames();
+    this->availableCameras.clear();
+    // Populate available cameras
+    for (const auto& cam : camFrames) {
+        if (cam->isConnected) {
+            availableCameras.push_back(cam->frameNickName);
+            // printf("2");
+        }
+        // printf("3");
+    }
+    
+    // If no cameras are available, show a message
+    if (availableCameras.empty()) {
+        ImGui::Text("No connected cameras available");
+        return;
+    }
+    
+    // Ensure selected index is valid
+    if (this->selectedCameraIndex >= availableCameras.size()) {
+        this->selectedCameraIndex = 0;
+        this->selectedCameraName = availableCameras[0];
+    }
+    
+    // Create the dropdown
+    if (ImGui::BeginCombo("##Camera Selector", availableCameras[this->selectedCameraIndex].c_str())) {
+        for (int i = 0; i < availableCameras.size(); i++) {
+            bool isSelected = (this->selectedCameraIndex == i);
+            if (ImGui::Selectable(availableCameras[i].c_str(), isSelected)) {
+                this->selectedCameraIndex = i;
+                this->selectedCameraName = availableCameras[i];
+                printf("selector");
+            }
+            
+            // Set the initial focus when opening the combo
+            if (isSelected) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndCombo();
+    }
+}
+
+
+void NodeArucoTracking::drawWorldSelector(){}
+void NodeArucoTracking::drawMainCamSelector(){}
+void NodeArucoTracking::calculateExtrinsicForParametars(std::string mainCam, std::string worldFrame){}
+void NodeArucoTracking::saveExtrinsics(std::string fileName){}
+void NodeArucoTracking::loadExtrinsics(){} 
+cv::Mat NodeArucoTracking::sendArucoPositions(cv::Mat img, std::string camframe){ return img;}
+
