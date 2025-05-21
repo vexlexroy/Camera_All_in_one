@@ -447,8 +447,10 @@ void NodeSourceStream::threadLoop(){
                 // cv::resize(newFrame, newFrame, rez);
                 cap.set(cv::CAP_PROP_FRAME_WIDTH, this->resolution[0]);
                 cap.set(cv::CAP_PROP_FRAME_HEIGHT, this->resolution[1]);
+                
                 this->changedres=false;
             }
+            cv::resize(newFrame,newFrame,cv::Size(this->resolution[0],this->resolution[1]));
 
 
             pass++;
@@ -527,8 +529,18 @@ void NodeSourceStream::threadLoop(){
             }
             
             if(this->shouldUndistort){
-                cv::Mat tempImage; // Temporary image to store the undistorted result
-                cv::undistort(newFrame, tempImage, this->openedStream->intrinsicParams.intrinsicMatrix, this->openedStream->intrinsicParams.distortionCoef);
+                cv::Mat tempImage; // Temporary image to store the undistorted result 
+                
+                cv::Mat opticam = cv::getOptimalNewCameraMatrix(this->openedStream->intrinsicParams.intrinsicMatrix,
+                                                                this->openedStream->intrinsicParams.distortionCoef,
+                                                                newFrame.size(),
+                                                                0,
+                                                                newFrame.size()
+                                                            );
+                cv::undistort(newFrame, tempImage, this->openedStream->intrinsicParams.intrinsicMatrix, 
+                                                   this->openedStream->intrinsicParams.distortionCoef,
+                                                   opticam
+                                                );
                 newFrame = tempImage;
             }
 

@@ -52,8 +52,8 @@ public:
     int roix[2] = {0,640}; // REGION OF INTEREST (testing area for led)
     int roiy[2] = {0,480};
     int area[2] = {300, 400}; //area of blob to be detected
-    int maxTime = 2000; // time witch stops delay test in ms
-    int timeOut = 5000; // time witch stops test if no msg from arduino comes
+    int maxTime = 5000; // time witch stops delay test in ms
+    int timeOut = 10000; // time witch stops test if no msg from arduino comes
 
     bool roiSelected = false;
     bool roiOn = false;
