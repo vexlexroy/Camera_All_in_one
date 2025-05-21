@@ -63,6 +63,11 @@ void NodeArucoTracking::drawNodeWork(){
     this->mutex.lock();
     if(this->lastMsg == nullptr){
         ImGui::PushItemWidth(100);
+        ImGui::Text("world frame:");
+        ImGui::SameLine();
+        this->drawWorldSelector();
+        ImGui::Text("view camera:");
+        ImGui::SameLine();
         this->drawDropdownSelector();
         ImGui::PopItemWidth();
         this->mutex.unlock();
@@ -70,6 +75,14 @@ void NodeArucoTracking::drawNodeWork(){
     }
     // get all opend streams and draw dropdown
     ImGui::PushItemWidth(100);
+    ImGui::Text("Marker Size [mm]:");
+    ImGui::SameLine();
+    ImGui::DragFloat("##marker_size",&this->markerSize,0.05);
+    ImGui::Text("world frame:");
+    ImGui::SameLine();
+    this->drawWorldSelector();
+    ImGui::Text("view camera:");
+    ImGui::SameLine();
     this->drawDropdownSelector();
     ImGui::PopItemWidth();
 
@@ -227,9 +240,9 @@ void NodeArucoTracking::recieve(std::shared_ptr<MessageBase> message, int connec
             if(msg->camOrigin->frameNickName == this->selectedCameraName){
                 this->lastMsg = std::make_unique<std::pair<cv::Mat, cv::Mat>>(std::make_pair<cv::Mat, cv::Mat>(msg->data->first.clone(), msg->data->second.clone())); // nije međudretveno sigurno
             }
-            else{
-                std::cout << "sel: " << this->selectedCameraName << "got: " << msg->camOrigin->frameNickName << "\n";
-            }
+            // else{
+            //     std::cout << "sel: " << this->selectedCameraName << "got: " << msg->camOrigin->frameNickName << "\n";
+            // }
 
         }
         this->mutex.unlock();  
@@ -237,22 +250,48 @@ void NodeArucoTracking::recieve(std::shared_ptr<MessageBase> message, int connec
     
 }
 
-void NodeArucoTracking::drawDropdownSelector(){
-    // printf("1");
+void NodeArucoTracking::getConCams(){
     // Get all active camera frames
     std::vector<std::shared_ptr<FrameCam>> camFrames = GlobalParams::getInstance().getCamFrames();
     this->availableCameras.clear();
     // Populate available cameras
     for (const auto& cam : camFrames) {
         if (cam->isConnected) {
-            availableCameras.push_back(cam->frameNickName);
+            this->availableCameras.push_back(cam->frameNickName);
             // printf("2");
         }
         // printf("3");
     }
-    
+    return;
+}
+
+void NodeArucoTracking::getValWorlds(){
+    this->availableWorlds.clear();
+    this->getConCams();
+    std::vector<std::shared_ptr<FrameCustom>> customFrames = GlobalParams::getInstance().getCamCustomFrames();
+    std::vector<std::shared_ptr<FrameRelation>> relations = GlobalParams::getInstance().getCamRelations();
+    for (const auto& frame : customFrames) {
+        for(auto& rels : relations){
+            for(auto& cam : this->availableCameras){
+                if(
+                    (cam == rels->frame_destination->frameNickName || cam == rels->frame_src->frameNickName)
+                    && (frame->frameNickName == rels->frame_destination->frameNickName || frame->frameNickName == rels->frame_src->frameNickName)
+                ){
+                    this->availableWorlds.push_back(frame->frameNickName);
+                }
+            }
+        }
+    }
+    for(auto cam : this->availableCameras){
+        this->availableWorlds.push_back(cam);
+    }
+    return;
+}
+
+void NodeArucoTracking::drawDropdownSelector(){
+    this->getConCams();
     // If no cameras are available, show a message
-    if (availableCameras.empty()) {
+    if (this->availableCameras.empty()) {
         ImGui::Text("No connected cameras available");
         return;
     }
@@ -267,10 +306,13 @@ void NodeArucoTracking::drawDropdownSelector(){
     if (ImGui::BeginCombo("##Camera Selector", availableCameras[this->selectedCameraIndex].c_str())) {
         for (int i = 0; i < availableCameras.size(); i++) {
             bool isSelected = (this->selectedCameraIndex == i);
+            if(isSelected && this->selectedCameraName==""){
+                this->selectedCameraName = availableCameras[i];
+            }
             if (ImGui::Selectable(availableCameras[i].c_str(), isSelected)) {
                 this->selectedCameraIndex = i;
                 this->selectedCameraName = availableCameras[i];
-                printf("selector");
+                // printf("selector");
             }
             
             // Set the initial focus when opening the combo
@@ -283,10 +325,45 @@ void NodeArucoTracking::drawDropdownSelector(){
 }
 
 
-void NodeArucoTracking::drawWorldSelector(){}
-void NodeArucoTracking::drawMainCamSelector(){}
-void NodeArucoTracking::calculateExtrinsicForParametars(std::string mainCam, std::string worldFrame){}
-void NodeArucoTracking::saveExtrinsics(std::string fileName){}
-void NodeArucoTracking::loadExtrinsics(){} 
-cv::Mat NodeArucoTracking::sendArucoPositions(cv::Mat img, std::string camframe){ return img;}
+void NodeArucoTracking::drawWorldSelector(){
+    this->getValWorlds();
+    if (this->availableWorlds.empty()) {
+        ImGui::Text("No worlds avalible");
+        return;
+    }
+    
+    // Ensure selected index is valid
+    if (this->selectedWorldIndex >= availableWorlds.size()) {
+        this->selectedWorldIndex = 0;
+        this->selectedWorld = availableWorlds[0];
+    }
+    
+    // Create the dropdown
+    if (ImGui::BeginCombo("##World Selector", availableWorlds[this->selectedWorldIndex].c_str())) {
+        for (int i = 0; i < availableCameras.size(); i++) {
+            bool isSelected = (this->selectedWorldIndex == i);
+            if(isSelected && this->selectedWorld==""){
+                this->selectedWorld = availableWorlds[i];
+            }
+            if (ImGui::Selectable(availableWorlds[i].c_str(), isSelected)) {
+                this->selectedWorldIndex = i;
+                this->selectedWorld = availableWorlds[i];
+                // printf("selector");
+            }
+            
+            // Set the initial focus when opening the combo
+            if (isSelected) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndCombo();
+    }
+} //draws selector for selecting world frame
+
+//void NodeArucoTracking::drawMainCamSelector(){}
+std::string getCameraWithWorldRelation();//gets the cammera with relation to selected world frame
+void NodeArucoTracking::calculateExtrinsicForParametars(std::string mainCam, std::string frame){} //calculates matrix form avalibel relations and saves new relation
+//void NodeArucoTracking::saveExtrinsics(std::string fileName){}
+//void NodeArucoTracking::loadExtrinsics(){} 
+cv::Mat NodeArucoTracking::sendArucoPositions(cv::Mat img, std::string camframe, std::string worldFrame){ return img;}// finds aruco marker on image and draws position and rotation on image
 

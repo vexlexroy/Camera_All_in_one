@@ -22,8 +22,14 @@ public:
     bool freezeFrameFlag = false;
 
     std::vector<std::string> availableCameras;
+    std::vector<std::string> availableWorlds;
     int selectedCameraIndex=0;
     std::string selectedCameraName = "";
+    int selectedWorldIndex=0;
+    std::string selectedWorld = "";
+
+    cv::aruco::Dictionary arucoDictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_4X4_50);
+    float markerSize = 0.0;
 
 
     NodeArucoTracking(int uniqueId);
@@ -43,11 +49,14 @@ public:
 
     void drawDropdownSelector();
     void drawWorldSelector();
-    void drawMainCamSelector();
+    //void drawMainCamSelector();
     void calculateExtrinsicForParametars(std::string mainCam, std::string worldFrame);
     void saveExtrinsics(std::string fileName);
     void loadExtrinsics();
-    cv::Mat sendArucoPositions(cv::Mat img, std::string camframe);
+    void getConCams();
+    void getValWorlds();
+    std::string getCameraWithWorldRelation();
+    cv::Mat sendArucoPositions(cv::Mat img, std::string camframe, std::string worldFrame);
     //void connectionAdded(int connectorId, int connectionId) override;
     //void connectionRemoved(int connectorId, int connectionId) override;
 };
