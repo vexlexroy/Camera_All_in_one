@@ -362,7 +362,55 @@ void NodeArucoTracking::drawWorldSelector(){
 
 //void NodeArucoTracking::drawMainCamSelector(){}
 std::string getCameraWithWorldRelation();//gets the cammera with relation to selected world frame
-void NodeArucoTracking::calculateExtrinsicForParametars(std::string mainCam, std::string frame){} //calculates matrix form avalibel relations and saves new relation
+bool NodeArucoTracking::calculateExtrinsicForParametars(std::string frameSrc, std::string frameDes){
+    auto relations = GlobalParams::getInstance().getCamRelations();
+    std::vector<std::shared_ptr<FrameRelation>> srcHit;
+    std::vector<std::shared_ptr<FrameRelation>> destHit;
+    std::shared_ptr<FrameRelation> inversHit = nullptr;
+    for(auto& rel : relations){
+        if(rel->frame_src->frameNickName == frameSrc){
+            if(rel->frame_destination->frameNickName == frameDes){
+                return true;
+            }
+            else{
+                srcHit.push_back(rel);
+            }
+        }
+        else if(rel->frame_destination->frameNickName == frameDes){
+            destHit.push_back(rel);
+        }
+        if(rel->frame_src->frameNickName == frameDes && rel->frame_destination->frameNickName == frameSrc){
+            inversHit=rel;
+            break;
+        }
+    }
+    if(inversHit != nullptr){
+        auto invertedRel = std::make_shared<FrameRelation>();
+        invertedRel->frame_src = inversHit->frame_destination;
+        invertedRel->frame_destination = inversHit->frame_src;
+        invertedRel->distance_between_cams_in_cm = inversHit->distance_between_cams_in_cm;
+        invertedRel->transformation_matrix = inversHit->transformation_matrix.inv();
+        invertedRel->transformation_matrix_reprojection_error = inversHit->transformation_matrix_reprojection_error;
+        GlobalParams::addNewRelation(invertedRel);
+        return true;
+    }
+    else{
+        for(auto& srcrel : srcHit){
+            if(this->calculateExtrinsicForParametars(srcrel->frame_destination,frameDes)){
+                auto newRel = std::make_shared<FrameRelation>();
+                newRel->frame_src->frameNickName = frameSrc;
+                newRel->frame_destination->frameNickName = frameDes;
+                auto tSrcrel = srcrel->transformation_matrix(cv::Rect(3, 0, 1, 3));
+                // newRel->distance_between_cams_in_cm = 
+                // newRel->transformation_matrix = 
+                // newRel->transformation_matrix_reprojection_error = 
+            }
+        }
+
+    }
+
+} //calculates matrix form avalibel relations and saves new relation
+
 //void NodeArucoTracking::saveExtrinsics(std::string fileName){}
 //void NodeArucoTracking::loadExtrinsics(){} 
 cv::Mat NodeArucoTracking::sendArucoPositions(cv::Mat img, std::string camframe, std::string worldFrame){ return img;}// finds aruco marker on image and draws position and rotation on image

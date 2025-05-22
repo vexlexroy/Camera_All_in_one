@@ -603,7 +603,7 @@ void NodeManualExtrinsic::drawNodeWork(){
                     newFrameRelation->transformation_matrix = cv::Mat::eye(4, 4, CV_64F); // Initialize as identity matrix
                     cv::Mat columnCorrectRotationMatrix = this->custom_frame_rotationMatrix.clone().t();
 
-                    printf("Prosao1\n");
+                    // printf("Prosao1\n");
                     for (int row = 0; row < 3; ++row) {
                         for (int col = 0; col < 3; ++col) {
                             newFrameRelation->transformation_matrix.at<double>(row, col) = columnCorrectRotationMatrix.at<float>(row, col);
@@ -618,7 +618,7 @@ void NodeManualExtrinsic::drawNodeWork(){
                     currentTranslationVector.at<float>(1, 0) = this->custom_frame_translationVector.y; // Y
                     currentTranslationVector.at<float>(2, 0) = this->custom_frame_translationVector.z; // Z
 
-                    printf("Prosao1\n");
+                    // printf("Prosao1\n");
 
 
                     cv::Mat correctTranslationVector = columnCorrectRotationMatrix * (-currentTranslationVector);
