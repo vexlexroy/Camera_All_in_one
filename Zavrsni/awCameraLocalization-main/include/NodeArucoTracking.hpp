@@ -20,6 +20,7 @@ public:
     GLuint selectTexture = 0;
     bool isShiftPresed = false;
     bool freezeFrameFlag = false;
+    bool showPositiontxt = true;
 
     std::vector<std::string> availableCameras;
     std::vector<std::string> availableWorlds;
@@ -29,7 +30,9 @@ public:
     std::string selectedWorld = "";
 
     cv::aruco::Dictionary arucoDictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_4X4_50);
-    float markerSize = 0.0;
+    float markerSize = 0.1; //cm
+    float fontsize = 5.0;
+
 
 
     NodeArucoTracking(int uniqueId);
@@ -51,12 +54,10 @@ public:
     void drawWorldSelector();
     //void drawMainCamSelector();
     std::shared_ptr<FrameRelation> calculateExtrinsicForParametars(std::string mainCam, std::string worldFrame);
-    void saveExtrinsics(std::string fileName);
-    void loadExtrinsics();
     void getConCams();
     void getValWorlds();
-    std::string getCameraWithWorldRelation();
-    cv::Mat sendArucoPositions(cv::Mat img, std::string camframe, std::string worldFrame);
+    cv::Mat arucoPositions(cv::Mat img, std::string camframe, std::string worldFrame);
+    void sendData(std::string cam, long long int tstamp,  std::vector<cv::Point3f> rvecs, std::vector<cv::Point3f> tvecs);
     //void connectionAdded(int connectorId, int connectionId) override;
     //void connectionRemoved(int connectorId, int connectionId) override;
 };
