@@ -50,7 +50,7 @@ public:
     void drawDropdownSelector();
     void drawWorldSelector();
     //void drawMainCamSelector();
-    bool calculateExtrinsicForParametars(std::string mainCam, std::string worldFrame);
+    std::shared_ptr<FrameRelation> calculateExtrinsicForParametars(std::string mainCam, std::string worldFrame);
     void saveExtrinsics(std::string fileName);
     void loadExtrinsics();
     void getConCams();
