@@ -570,12 +570,9 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
             ss_x << "x: " << std::fixed << std::setprecision(2) << x*100 << "cm ";
             ss_y << "y: " << std::fixed << std::setprecision(2) << y*100 << "cm ";
             ss_z << "z: " << std::fixed << std::setprecision(2) << z*100 << "cm";
-
-            // Rotation angles
             ss_roll << "roll: "<< std::fixed << std::setprecision(2) << roll;
             ss_pitch << "pitch: "<< std::fixed << std::setprecision(2) << pitch;
             ss_yaw << "yaw: "<< std::fixed << std::setprecision(2) << yaw;
-
             cv::Point position(corners[i][0].x, corners[i][0].y);
             int thickness = 2;
             int fontFace = cv::FONT_HERSHEY_SIMPLEX;
