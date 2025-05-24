@@ -85,6 +85,9 @@ void NodeArucoTracking::drawNodeWork(){
     ImGui::SameLine();
     this->drawDropdownSelector();
     ImGui::PopItemWidth();
+    if(ImGui::Button("test calc")){
+        this->calculateExtrinsicForParametars("laptop","laptop");
+    }
 
     //Tu update napraviti tako da se uzima freezed frame ako treba...
     Util::mat2Texture(this->lastMsg->first, this->lastMsg->second, this->texture); // if freezed -> update....
@@ -214,6 +217,15 @@ void NodeArucoTracking::drawNodeWork(){
         //This should be correct texture
         Util::mat2Texture(this->lastMsg->first, this->lastMsg->second, this->selectTexture);
         ImGui::Image((ImTextureID)(intptr_t)this->selectTexture, ImVec2(this->resolution[0], this->resolution[1]), this->zoom_A, this->zoom_B);
+
+        ImGui::Text("show stats:");
+        ImGui::SameLine();
+        ImGui::Checkbox("##showstats",&this->showPositiontxt);
+        ImGui::SameLine();
+        ImGui::Text("font size:");
+        ImGui::SameLine();
+        ImGui::DragFloat("##font",&this->fontsize,0.5,0.1);
+
         
         ImGui::EndPopup();
     }
@@ -225,30 +237,49 @@ void NodeArucoTracking::drawNodeWork(){
 }
 
 
-
-void NodeArucoTracking::recieve(std::shared_ptr<MessageBase> message, int connectorId){
+void NodeArucoTracking::recieve(std::shared_ptr<MessageBase> message, int connectorId) {
     std::shared_ptr<ConnectorBase> connector = this->getConnector(connectorId);
-    if(connector->connectorMessageType == Enums::MessageType::PICTURE){
-        std::shared_ptr<Message<std::shared_ptr<std::pair<cv::Mat, cv::Mat>>>> msg = std::dynamic_pointer_cast<Message<std::shared_ptr<std::pair<cv::Mat, cv::Mat>>>>(message);
-        this->resolution[0]=msg->data->first.cols;
-        this->resolution[1]=msg->data->first.rows;
+    if(connector->connectorMessageType == Enums::MessageType::PICTURE) {
+        auto msg = std::dynamic_pointer_cast<Message<std::shared_ptr<std::pair<cv::Mat, cv::Mat>>>>(message);
+        this->resolution[0] = msg->data->first.cols;
+        this->resolution[1] = msg->data->first.rows;
         std::string camName = msg->camOrigin->frameNickName;
 
         this->mutex.lock();
-        if(!this->isShiftPresed)
-        {
-            if(msg->camOrigin->frameNickName == this->selectedCameraName){
-                this->lastMsg = std::make_unique<std::pair<cv::Mat, cv::Mat>>(std::make_pair<cv::Mat, cv::Mat>(msg->data->first.clone(), msg->data->second.clone())); // nije međudretveno sigurno
+        if(!this->isShiftPresed) {
+            try {
+                if(this->selectedWorld != "") {
+                    std::vector<cv::Mat> poses;
+                    std::vector<int> ids;
+                    // Process the image
+                    cv::Mat processedImage = this->arucoPositions(msg->data->first.clone(), camName, this->selectedWorld, poses, ids);
+                    
+                    // Create the pair correctly
+                    if(msg->camOrigin->frameNickName == this->selectedCameraName) {
+                        this->lastMsg = std::make_unique<std::pair<cv::Mat, cv::Mat>>(processedImage,msg->data->second.clone());
+                    }
+                }
+                else {
+                    if(msg->camOrigin->frameNickName == this->selectedCameraName) {
+                        this->lastMsg = std::make_unique<std::pair<cv::Mat, cv::Mat>>(msg->data->first.clone(), msg->data->second.clone());
+                    }
+                }
             }
-            // else{
-            //     std::cout << "sel: " << this->selectedCameraName << "got: " << msg->camOrigin->frameNickName << "\n";
-            // }
-
+            catch (const cv::Exception& e) {
+                std::cerr << "OpenCV Exception: " << e.what() << std::endl;
+            }
+            catch (const std::exception& e) {
+                std::cerr << "Standard Exception: " << e.what() << std::endl;
+            }
+            catch (...) {
+                std::cerr << "Unknown Exception caught!" << std::endl;
+            }
         }
         this->mutex.unlock();  
     }
-    
 }
+
+
 
 void NodeArucoTracking::getConCams(){
     // Get all active camera frames
@@ -339,8 +370,8 @@ void NodeArucoTracking::drawWorldSelector(){
     }
     
     // Create the dropdown
-    if (ImGui::BeginCombo("##World Selector", availableWorlds[this->selectedWorldIndex].c_str())) {
-        for (int i = 0; i < availableCameras.size(); i++) {
+    if (ImGui::BeginCombo("##World Selector", this->availableWorlds[this->selectedWorldIndex].c_str())) {
+        for (int i = 0; i < this->availableWorlds.size(); i++) {
             bool isSelected = (this->selectedWorldIndex == i);
             if(isSelected && this->selectedWorld==""){
                 this->selectedWorld = availableWorlds[i];
@@ -364,7 +395,13 @@ void NodeArucoTracking::drawWorldSelector(){
 std::shared_ptr<FrameRelation> NodeArucoTracking::calculateExtrinsicForParametars(std::string frameSrc, std::string frameDes) {
 
     if(frameSrc == frameDes){
-        return cv::Mat::eye(4, 4, CV_64F);
+        auto singularRel = std::make_shared<FrameRelation>();
+        singularRel->distance_between_cams_in_cm=1.0;
+        singularRel->frame_destination = GlobalParams::getInstance().getFrame(frameDes);
+        singularRel->frame_src = GlobalParams::getInstance().getFrame(frameSrc);
+        singularRel->transformation_matrix=cv::Mat::eye(4, 4, CV_64F);
+        singularRel->transformation_matrix_reprojection_error=0.0;
+        return singularRel;
     }
     auto relations = GlobalParams::getInstance().getCamRelations();
     //Direct relation exists
@@ -463,8 +500,10 @@ std::shared_ptr<FrameRelation> NodeArucoTracking::calculateExtrinsicForParametar
     GlobalParams::getInstance().addNewRelation(newRel);
     return newRel;
 }
-cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std::string worldFrame){
+cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std::string worldFrame, std::vector<cv::Mat>& allposes, std::vector<int>& allids){
+    // printf("detecting A\n");
     auto relation = this->calculateExtrinsicForParametars(camframe, worldFrame);
+    // printf("relation calc\n");
     auto frames = GlobalParams::getInstance().getCamFrames();
     Structs::IntrinsicCamParams intrinsics;
     for (auto& cams : frames){
@@ -490,30 +529,26 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
 
     std::vector<int> ids;
     std::vector<std::vector<cv::Point2f>> corners;
-    cv::aruco::ArucoDetector::detectMarkers(img, this->arucoDictionary, corners, ids);
+    cv::aruco::ArucoDetector detect;
+    detect.setDictionary(this->arucoDictionary);
+    detect.detectMarkers(img, corners, ids);
     if(ids.empty()) return img; 
-
-    for(size_t i = 0; i < ids.size(); i++) {
-    // 3D object points for a marker (in its own coordinate system)
+    
     std::vector<cv::Point3f> objectPoints = {
         cv::Point3f(-this->markerSize/200,  this->markerSize/200, 0), // Top-left
         cv::Point3f( this->markerSize/200,  this->markerSize/200, 0), // Top-right
         cv::Point3f( this->markerSize/200, -this->markerSize/200, 0), // Bottom-right
         cv::Point3f(-this->markerSize/200, -this->markerSize/200, 0)  // Bottom-left
     };
+
     std::vector<cv::Mat>poses;
     for(int i=0;i<ids.size();i++){
-        cv::Vec3b rvec, tvec;
+        cv::Vec3d rvec, tvec;
         cv::solvePnP(objectPoints, corners[i],
                     intrinsics.intrinsicMatrix,
                     intrinsics.distortionCoef,
                     rvec, tvec);
-        cv::drawFrameAxes(img, 
-            cam->intrinsicParams.intrinsicMatrix,
-            cam->intrinsicParams.distortionCoef,
-            rvec, 
-            tvec, 
-            markerSize/200);
+        cv::drawFrameAxes(img, intrinsics.intrinsicMatrix, intrinsics.distortionCoef, rvec, tvec, markerSize/200);
 
         cv::Mat R;
         cv::Rodrigues(rvec, R);
@@ -523,14 +558,78 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
         pose.at<double>(1, 3) = tvec[1];
         pose.at<double>(2, 3) = tvec[2];
         pose = transform*pose; 
+        poses.push_back(pose);
+        if(this->showPositiontxt){
+            int id = ids[i];
+            float x = pose.at<double>(0,3);
+            float y = pose.at<double>(1,3);
+            float z = pose.at<double>(2,3);
+            double yaw,roll,pitch;
+            this->rotationMatrixToEulerAngles(pose(cv::Rect(0, 0, 3, 3)),roll,pitch,yaw);
+            std::stringstream ss_x, ss_y, ss_z, ss_roll, ss_pitch, ss_yaw;
+            ss_x << "x: " << std::fixed << std::setprecision(2) << x*100 << "cm ";
+            ss_y << "y: " << std::fixed << std::setprecision(2) << y*100 << "cm ";
+            ss_z << "z: " << std::fixed << std::setprecision(2) << z*100 << "cm";
+
+            // Rotation angles
+            ss_roll << "roll: "<< std::fixed << std::setprecision(2) << roll;
+            ss_pitch << "pitch: "<< std::fixed << std::setprecision(2) << pitch;
+            ss_yaw << "yaw: "<< std::fixed << std::setprecision(2) << yaw;
+
+            cv::Point position(corners[i][0].x, corners[i][0].y);
+            int thickness = 2;
+            int fontFace = cv::FONT_HERSHEY_SIMPLEX;
+            int baseline = 0;
+            cv::Size textSize = cv::getTextSize("Test", fontFace, this->fontsize, thickness, &baseline);
+            int lineHeight = textSize.height + 5;
+            int x_offset = 0;
+            drawColoredSegment(img, ss_x.str(), cv::Scalar(0, 0, 255), position, this->fontsize, thickness, &x_offset);  // Red
+            drawColoredSegment(img, ss_y.str(), cv::Scalar(0, 255, 0), position, this->fontsize, thickness, &x_offset);  // Green
+            drawColoredSegment(img, ss_z.str(), cv::Scalar(255, 0, 0), position, this->fontsize, thickness, &x_offset);   // Blue
+            x_offset = 0;
+            cv::Point rotationPosition(position.x, position.y + lineHeight);
+            drawColoredSegment(img, ss_roll.str(), cv::Scalar(0, 0, 255), rotationPosition, this->fontsize, thickness, &x_offset);  // Red
+            drawColoredSegment(img, ss_pitch.str(), cv::Scalar(0, 255, 0), rotationPosition, this->fontsize, thickness, &x_offset);  // Green
+            drawColoredSegment(img, ss_yaw.str(), cv::Scalar(255, 0, 0), rotationPosition, this->fontsize, thickness, &x_offset);     // Blue
+        }
+
     }
+    allids=ids;
+    allposes=poses;
 
     return img;
     
     
 }// finds aruco marker on image and draws position and rotation on image
 
-void sendData(std::string cam, long long int tstamp,  std::vector<cv::Point3f> rvecs, std::vector<cv::Point3f> tvecs){
+void NodeArucoTracking::sendData(std::string cam, long long int tstamp,  std::vector<cv::Mat> poses, std::vector<int> ids){
 
+}
+
+
+
+void NodeArucoTracking::rotationMatrixToEulerAngles(const cv::Mat& R, double& roll, double& pitch, double& yaw) {
+    // Using YXZ convention (common in computer vision)
+    pitch = asin(-R.at<double>(2, 0));
+    const double cos_pitch = cos(pitch);
+    roll = atan2(R.at<double>(2, 1)/cos_pitch, R.at<double>(2, 2)/cos_pitch);
+    yaw = atan2(R.at<double>(1, 0)/cos_pitch, R.at<double>(0, 0)/cos_pitch);
+    // Convert to degrees
+    roll *= 180 / CV_PI;
+    pitch *= 180 / CV_PI;
+    yaw *= 180 / CV_PI;
+}
+
+void NodeArucoTracking::drawColoredSegment(cv::Mat& img, const std::string& text, const cv::Scalar& color, 
+    cv::Point& position, double fontsize, int thickness, int* x_offset) {
+int baseline = 0;
+int fontFace = cv::FONT_HERSHEY_SIMPLEX;
+cv::Size textSize = cv::getTextSize(text, fontFace, fontsize, thickness, &baseline);
+
+cv::putText(img, text, 
+cv::Point(position.x + *x_offset, position.y), 
+fontFace, fontsize, color, thickness);
+
+*x_offset += textSize.width;
 }
 

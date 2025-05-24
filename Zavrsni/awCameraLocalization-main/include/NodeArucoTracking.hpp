@@ -30,8 +30,8 @@ public:
     std::string selectedWorld = "";
 
     cv::aruco::Dictionary arucoDictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_4X4_50);
-    float markerSize = 0.1; //cm
-    float fontsize = 5.0;
+    float markerSize = 3.8; //cm
+    float fontsize = 0.8;
 
 
 
@@ -56,8 +56,12 @@ public:
     std::shared_ptr<FrameRelation> calculateExtrinsicForParametars(std::string mainCam, std::string worldFrame);
     void getConCams();
     void getValWorlds();
-    cv::Mat arucoPositions(cv::Mat img, std::string camframe, std::string worldFrame);
-    void sendData(std::string cam, long long int tstamp,  std::vector<cv::Point3f> rvecs, std::vector<cv::Point3f> tvecs);
+    cv::Mat arucoPositions(cv::Mat img, std::string camframe, std::string worldFrame, std::vector<cv::Mat>& allposes, std::vector<int>& allids);
+    void sendData(std::string cam, long long int tstamp,  std::vector<cv::Mat> poses, std::vector<int> ids);
+
+
+    void rotationMatrixToEulerAngles(const cv::Mat& R, double& roll, double& pitch, double& yaw);
+    void drawColoredSegment(cv::Mat& img, const std::string& text, const cv::Scalar& color, cv::Point& position, double fontsize, int thickness, int* x_offset);
     //void connectionAdded(int connectorId, int connectionId) override;
     //void connectionRemoved(int connectorId, int connectionId) override;
 };
