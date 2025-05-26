@@ -15,6 +15,7 @@
 #include <imgui.h>
 #include <opencv2/core/matx.hpp>
 #include <algorithm>
+#include <nlohmann/json.hpp>
 
 NodeArucoTracking::NodeArucoTracking(int uniqueId) : NodeBase(uniqueId){
     this->nodeType = Enums::NodeType::NODEARUCOTRACKING;
@@ -75,7 +76,7 @@ void NodeArucoTracking::drawNodeWork(){
     }
     // get all opend streams and draw dropdown
     ImGui::PushItemWidth(100);
-    ImGui::Text("Marker Size [mm]:");
+    ImGui::Text("Marker Size [cm]:");
     ImGui::SameLine();
     ImGui::DragFloat("##marker_size",&this->markerSize,0.05);
     ImGui::Text("world frame:");
@@ -85,9 +86,9 @@ void NodeArucoTracking::drawNodeWork(){
     ImGui::SameLine();
     this->drawDropdownSelector();
     ImGui::PopItemWidth();
-    if(ImGui::Button("test calc")){
-        this->calculateExtrinsicForParametars("laptop","laptop");
-    }
+    // if(ImGui::Button("test calc")){
+    //     this->calculateExtrinsicForParametars("laptop","laptop");
+    // }
 
     //Tu update napraviti tako da se uzima freezed frame ako treba...
     Util::mat2Texture(this->lastMsg->first, this->lastMsg->second, this->texture); // if freezed -> update....
@@ -251,8 +252,10 @@ void NodeArucoTracking::recieve(std::shared_ptr<MessageBase> message, int connec
                 if(this->selectedWorld != "") {
                     std::vector<cv::Mat> poses;
                     std::vector<int> ids;
+                    nlohmann::json markData = nullptr;
                     // Process the image
-                    cv::Mat processedImage = this->arucoPositions(msg->data->first.clone(), camName, this->selectedWorld, poses, ids);
+                    cv::Mat processedImage = this->arucoPositions(msg->data->first.clone(), camName, this->selectedWorld, poses, ids, markData);
+                    this->sendData(camName, msg->getBaseTimestamp(), markData);
                     
                     // Create the pair correctly
                     if(msg->camOrigin->frameNickName == this->selectedCameraName) {
@@ -480,9 +483,9 @@ std::shared_ptr<FrameRelation> NodeArucoTracking::calculateExtrinsicForParametar
         cv::Mat T = rel->transformation_matrix.clone();
     
         // Scale only the translation part
-        T.at<double>(0, 3) *= rel->distance_between_cams_in_cm;
-        T.at<double>(1, 3) *= rel->distance_between_cams_in_cm;
-        T.at<double>(2, 3) *= rel->distance_between_cams_in_cm;
+        T.at<double>(0, 3) *= rel->distance_between_cams_in_cm/100.0;
+        T.at<double>(1, 3) *= rel->distance_between_cams_in_cm/100.0;
+        T.at<double>(2, 3) *= rel->distance_between_cams_in_cm/100.0;
     
         // Apply transformation
         T_total = T_total * T;
@@ -491,16 +494,16 @@ std::shared_ptr<FrameRelation> NodeArucoTracking::calculateExtrinsicForParametar
     auto newRel = std::make_shared<FrameRelation>();
     newRel->frame_src = GlobalParams::getInstance().getFrame(frameSrc);
     newRel->frame_destination = GlobalParams::getInstance().getFrame(frameDes);
-    newRel->distance_between_cams_in_cm = cv::norm(T_total(cv::Rect(3, 0, 1, 3)));
-    T_total.at<double>(0,3)/=newRel->distance_between_cams_in_cm;
-    T_total.at<double>(1,3)/=newRel->distance_between_cams_in_cm;
-    T_total.at<double>(2,3)/=newRel->distance_between_cams_in_cm;
+    newRel->distance_between_cams_in_cm = cv::norm(T_total(cv::Rect(3, 0, 1, 3)))*100;
+    T_total.at<double>(0,3)/=(newRel->distance_between_cams_in_cm/100.0);
+    T_total.at<double>(1,3)/=(newRel->distance_between_cams_in_cm/100.0);
+    T_total.at<double>(2,3)/=(newRel->distance_between_cams_in_cm/100.0);
     newRel->transformation_matrix = T_total;
     newRel->transformation_matrix_reprojection_error = maxreperror;
     GlobalParams::getInstance().addNewRelation(newRel);
     return newRel;
 }
-cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std::string worldFrame, std::vector<cv::Mat>& allposes, std::vector<int>& allids){
+cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std::string worldFrame, std::vector<cv::Mat>& allposes, std::vector<int>& allids, nlohmann::json& jsonData){
     // printf("detecting A\n");
     auto relation = this->calculateExtrinsicForParametars(camframe, worldFrame);
     // printf("relation calc\n");
@@ -521,9 +524,9 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
         return img;
     }
     auto transform = relation->transformation_matrix.clone();
-    transform.at<double>(0,3)*=relation->distance_between_cams_in_cm;
-    transform.at<double>(1,3)*=relation->distance_between_cams_in_cm;
-    transform.at<double>(2,3)*=relation->distance_between_cams_in_cm;
+    transform.at<double>(0,3)*=relation->distance_between_cams_in_cm/100.0;
+    transform.at<double>(1,3)*=relation->distance_between_cams_in_cm/100.0;
+    transform.at<double>(2,3)*=relation->distance_between_cams_in_cm/100.0;
     auto translation = transform(cv::Rect(3, 0, 1, 3));
     auto rotation = transform(cv::Rect(0, 0, 3, 3));
 
@@ -542,13 +545,14 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
     };
 
     std::vector<cv::Mat>poses;
+    nlohmann::json dataArray = nlohmann::json::array();
     for(int i=0;i<ids.size();i++){
         cv::Vec3d rvec, tvec;
         cv::solvePnP(objectPoints, corners[i],
                     intrinsics.intrinsicMatrix,
                     intrinsics.distortionCoef,
                     rvec, tvec);
-        cv::drawFrameAxes(img, intrinsics.intrinsicMatrix, intrinsics.distortionCoef, rvec, tvec, markerSize/200);
+        cv::drawFrameAxes(img, intrinsics.intrinsicMatrix, intrinsics.distortionCoef, rvec, tvec, markerSize/200.0);
 
         cv::Mat R;
         cv::Rodrigues(rvec, R);
@@ -559,20 +563,21 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
         pose.at<double>(2, 3) = tvec[2];
         pose = transform*pose; 
         poses.push_back(pose);
+        // draw part
+        int id = ids[i];
+        float x = pose.at<double>(0,3);
+        float y = pose.at<double>(1,3);
+        float z = pose.at<double>(2,3);
+        double yaw,roll,pitch;
+        this->rotationMatrixToEulerAngles(pose(cv::Rect(0, 0, 3, 3)),roll,pitch,yaw);
         if(this->showPositiontxt){
-            int id = ids[i];
-            float x = pose.at<double>(0,3);
-            float y = pose.at<double>(1,3);
-            float z = pose.at<double>(2,3);
-            double yaw,roll,pitch;
-            this->rotationMatrixToEulerAngles(pose(cv::Rect(0, 0, 3, 3)),roll,pitch,yaw);
             std::stringstream ss_x, ss_y, ss_z, ss_roll, ss_pitch, ss_yaw;
-            ss_x << "x: " << std::fixed << std::setprecision(2) << x*100 << "cm ";
-            ss_y << "y: " << std::fixed << std::setprecision(2) << y*100 << "cm ";
-            ss_z << "z: " << std::fixed << std::setprecision(2) << z*100 << "cm";
-            ss_roll << "roll: "<< std::fixed << std::setprecision(2) << roll;
-            ss_pitch << "pitch: "<< std::fixed << std::setprecision(2) << pitch;
-            ss_yaw << "yaw: "<< std::fixed << std::setprecision(2) << yaw;
+            ss_x << "x: " << std::fixed << std::setprecision(1) << x*100 << "cm ";
+            ss_y << "y: " << std::fixed << std::setprecision(1) << y*100 << "cm ";
+            ss_z << "z: " << std::fixed << std::setprecision(1) << z*100 << "cm";
+            ss_roll << "roll: "<< std::fixed << std::setprecision(1) << roll;
+            ss_pitch << "pitch: "<< std::fixed << std::setprecision(1) << pitch;
+            ss_yaw << "yaw: "<< std::fixed << std::setprecision(1) << yaw;
             cv::Point position(corners[i][0].x, corners[i][0].y);
             int thickness = 2;
             int fontFace = cv::FONT_HERSHEY_SIMPLEX;
@@ -589,17 +594,33 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
             drawColoredSegment(img, ss_pitch.str(), cv::Scalar(0, 255, 0), rotationPosition, this->fontsize, thickness, &x_offset);  // Green
             drawColoredSegment(img, ss_yaw.str(), cv::Scalar(255, 0, 0), rotationPosition, this->fontsize, thickness, &x_offset);     // Blue
         }
-
+        nlohmann::json markerData;
+        markerData["id"] = id;
+        markerData["x"] = x;
+        markerData["y"] = y;
+        markerData["z"] = z;
+        markerData["yaw"] = yaw;
+        markerData["roll"] = roll;
+        markerData["pitch"] = pitch;
+        dataArray.push_back(markerData);
     }
+    
+    // cameraData["time"] = 
     allids=ids;
     allposes=poses;
-
+    jsonData=dataArray;
     return img;
     
     
 }// finds aruco marker on image and draws position and rotation on image
 
-void NodeArucoTracking::sendData(std::string cam, long long int tstamp,  std::vector<cv::Mat> poses, std::vector<int> ids){
+void NodeArucoTracking::sendData(std::string cam, long long int tstamp,  nlohmann::json markerData){
+    nlohmann::json frameData;
+    frameData["cam"] = cam;
+    frameData["time"] = tstamp;
+    frameData["data"] = markerData;
+    std::cout << frameData.dump();
+    //Network Logic
 
 }
 
@@ -617,8 +638,7 @@ void NodeArucoTracking::rotationMatrixToEulerAngles(const cv::Mat& R, double& ro
     yaw *= 180 / CV_PI;
 }
 
-void NodeArucoTracking::drawColoredSegment(cv::Mat& img, const std::string& text, const cv::Scalar& color, 
-    cv::Point& position, double fontsize, int thickness, int* x_offset) {
+void NodeArucoTracking::drawColoredSegment(cv::Mat& img, const std::string& text, const cv::Scalar& color, cv::Point& position, double fontsize, int thickness, int* x_offset) {
 int baseline = 0;
 int fontFace = cv::FONT_HERSHEY_SIMPLEX;
 cv::Size textSize = cv::getTextSize(text, fontFace, fontsize, thickness, &baseline);

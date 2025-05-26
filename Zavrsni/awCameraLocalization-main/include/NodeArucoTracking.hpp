@@ -8,6 +8,7 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/matx.hpp>
 #include <imgui.h>
+#include <nlohmann/json.hpp>
 
 class NodeArucoTracking : public NodeBase{
 public:
@@ -56,8 +57,8 @@ public:
     std::shared_ptr<FrameRelation> calculateExtrinsicForParametars(std::string mainCam, std::string worldFrame);
     void getConCams();
     void getValWorlds();
-    cv::Mat arucoPositions(cv::Mat img, std::string camframe, std::string worldFrame, std::vector<cv::Mat>& allposes, std::vector<int>& allids);
-    void sendData(std::string cam, long long int tstamp,  std::vector<cv::Mat> poses, std::vector<int> ids);
+    cv::Mat arucoPositions(cv::Mat img, std::string camframe, std::string worldFrame, std::vector<cv::Mat>& allposes, std::vector<int>& allids, nlohmann::json& jsonData);
+    void sendData(std::string cam, long long int tstamp,  nlohmann::json markerData);
 
 
     void rotationMatrixToEulerAngles(const cv::Mat& R, double& roll, double& pitch, double& yaw);
