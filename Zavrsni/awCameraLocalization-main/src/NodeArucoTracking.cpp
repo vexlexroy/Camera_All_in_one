@@ -85,6 +85,40 @@ void NodeArucoTracking::drawNodeWork(){
     ImGui::Text("view camera:");
     ImGui::SameLine();
     this->drawDropdownSelector();
+    ImGui::Text("ip:");
+    ImGui::SameLine();
+    if(ImGui::InputTextWithHint("##ip", "0.0.0.0", this->ipBuffer, sizeof(this->ipBuffer)))
+        this->ip=this->ipBuffer;
+    ImGui::SameLine();
+    ImGui::InputInt("port",&this->port);
+    ImGui::SameLine();
+    if(this->initialised) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 1.0f, 0.0f, 1.0f)); //green
+    else ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.5f, 1.0f, 1.0f)); //blue
+    if(ImGui::Button("set")){
+        try{
+            auto ipaddress = boost::asio::ip::make_address(this->ip);
+            this->conection = boost::asio::ip::udp::endpoint(
+                ipaddress,  // IP address
+                static_cast<unsigned short>(this->port)
+            );
+            std::cout << ipaddress << ":" << this->port << "\n";
+            if (!socket) {
+                socket = std::make_unique<boost::asio::ip::udp::socket>(asio_io);
+            }
+                this->socket->open(boost::asio::ip::udp::v4());
+            this->initialised=true;
+        }catch (const boost::system::system_error& e) {
+            std::cerr << "Invalid address: " << e.what() << std::endl;
+            this->initialised=false;
+        }catch (const std::exception& e) {
+            std::cerr << "Standard exception: " << e.what() << std::endl;
+            this->initialised = false;
+        }
+    }
+    ImGui::Text("sending:");
+    ImGui::SameLine();
+    ImGui::Checkbox("##sending", &this->sending);
+    ImGui::PopStyleColor();
     ImGui::PopItemWidth();
     // if(ImGui::Button("test calc")){
     //     this->calculateExtrinsicForParametars("laptop","laptop");
@@ -98,11 +132,11 @@ void NodeArucoTracking::drawNodeWork(){
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
     //ImGui::ImageButton()
     if (ImGui::ImageButton("", (ImTextureID)(intptr_t)this->texture, ImVec2(this->resolution[0]*GlobalParams::getInstance().getZoom().scaleFactor, this->resolution[1]*GlobalParams::getInstance().getZoom().scaleFactor))){
-        ImGui::OpenPopup("choose range");
+        ImGui::OpenPopup("preview");
     }
     ImGui::PopStyleColor();
-    if (ImGui::BeginPopup("choose range")){
-        ImGui::SeparatorText("choose range");
+    if (ImGui::BeginPopup("preview")){
+        ImGui::SeparatorText("preview");
         ImGuiIO& io = ImGui::GetIO();
 
         ImVec2 pos = ImGui::GetCursorScreenPos();
@@ -255,7 +289,8 @@ void NodeArucoTracking::recieve(std::shared_ptr<MessageBase> message, int connec
                     nlohmann::json markData = nullptr;
                     // Process the image
                     cv::Mat processedImage = this->arucoPositions(msg->data->first.clone(), camName, this->selectedWorld, poses, ids, markData);
-                    this->sendData(camName, msg->getBaseTimestamp(), markData);
+                    if(this->sending && this->initialised)
+                        this->sendData(camName, msg->getBaseTimestamp(), msg->startLagDuration, msg->getBaseDelay(), markData);
                     
                     // Create the pair correctly
                     if(msg->camOrigin->frameNickName == this->selectedCameraName) {
@@ -569,15 +604,17 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
         float y = pose.at<double>(1,3);
         float z = pose.at<double>(2,3);
         double yaw,roll,pitch;
+        double qw,qx,qy,qz;
         this->rotationMatrixToEulerAngles(pose(cv::Rect(0, 0, 3, 3)),roll,pitch,yaw);
+        this->rotationMatrixToQuaternion(pose(cv::Rect(0, 0, 3, 3)), qw,qx,qy,qz);
         if(this->showPositiontxt){
             std::stringstream ss_x, ss_y, ss_z, ss_roll, ss_pitch, ss_yaw;
-            ss_x << "x: " << std::fixed << std::setprecision(1) << x*100 << "cm ";
-            ss_y << "y: " << std::fixed << std::setprecision(1) << y*100 << "cm ";
+            ss_x << "x: " << std::fixed << std::setprecision(1) << x*100 << " ";
+            ss_y << "y: " << std::fixed << std::setprecision(1) << y*100 << " ";
             ss_z << "z: " << std::fixed << std::setprecision(1) << z*100 << "cm";
-            ss_roll << "roll: "<< std::fixed << std::setprecision(1) << roll;
-            ss_pitch << "pitch: "<< std::fixed << std::setprecision(1) << pitch;
-            ss_yaw << "yaw: "<< std::fixed << std::setprecision(1) << yaw;
+            ss_roll << "r: "<< std::fixed << std::setprecision(1) << roll;
+            ss_pitch << "p: "<< std::fixed << std::setprecision(1) << pitch;
+            ss_yaw << "y: "<< std::fixed << std::setprecision(1) << yaw;
             cv::Point position(corners[i][0].x, corners[i][0].y);
             int thickness = 2;
             int fontFace = cv::FONT_HERSHEY_SIMPLEX;
@@ -602,6 +639,10 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
         markerData["yaw"] = yaw;
         markerData["roll"] = roll;
         markerData["pitch"] = pitch;
+        markerData["qw"] = qw;
+        markerData["qx"] = qx;
+        markerData["qy"] = qy;
+        markerData["qz"] = qz;
         dataArray.push_back(markerData);
     }
     
@@ -614,14 +655,19 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
     
 }// finds aruco marker on image and draws position and rotation on image
 
-void NodeArucoTracking::sendData(std::string cam, long long int tstamp,  nlohmann::json markerData){
+void NodeArucoTracking::sendData(std::string cam, long long int tstamp, long long int delay, long long int delay2,  nlohmann::json markerData){
     nlohmann::json frameData;
     frameData["cam"] = cam;
     frameData["time"] = tstamp;
+    frameData["cam_delay"] = delay;
+    frameData["total_delay"] = delay2;
     frameData["data"] = markerData;
-    std::cout << frameData.dump();
-    //Network Logic
-
+    if(!markerData.empty()){
+        // std::cout << frameData.dump() << "\n";
+        // printf("send:\n");
+        this->socket->send_to(boost::asio::buffer(frameData.dump()),this->conection);
+    }
+    return;
 }
 
 
@@ -638,15 +684,50 @@ void NodeArucoTracking::rotationMatrixToEulerAngles(const cv::Mat& R, double& ro
     yaw *= 180 / CV_PI;
 }
 
+void NodeArucoTracking::rotationMatrixToQuaternion(const cv::Mat& R, double& qw,double& qx,double& qy,double& qz) {
+    // Ensure R is a 3x3 float/double matrix
+    CV_Assert(R.rows == 3 && R.cols == 3 && (R.type() == CV_64F || R.type() == CV_32F));
+    double m00 = R.at<double>(0,0), m01 = R.at<double>(0,1), m02 = R.at<double>(0,2);
+    double m10 = R.at<double>(1,0), m11 = R.at<double>(1,1), m12 = R.at<double>(1,2);
+    double m20 = R.at<double>(2,0), m21 = R.at<double>(2,1), m22 = R.at<double>(2,2);
+    double trace = m00 + m11 + m22;
+    if (trace > 0) {
+        double S = sqrt(trace + 1.0) * 2.0; // S = 4*qw
+        qw = 0.25 * S;
+        qx = (m21 - m12) / S;
+        qy = (m02 - m20) / S;
+        qz = (m10 - m01) / S;
+    } else if ((m00 > m11) && (m00 > m22)) {
+        double S = sqrt(1.0 + m00 - m11 - m22) * 2.0; // S = 4*qx
+        qw = (m21 - m12) / S;
+        qx = 0.25 * S;
+        qy = (m01 + m10) / S;
+        qz = (m02 + m20) / S;
+    } else if (m11 > m22) {
+        double S = sqrt(1.0 + m11 - m00 - m22) * 2.0; // S = 4*qy
+        qw = (m02 - m20) / S;
+        qx = (m01 + m10) / S;
+        qy = 0.25 * S;
+        qz = (m12 + m21) / S;
+    } else {
+        double S = sqrt(1.0 + m22 - m00 - m11) * 2.0; // S = 4*qz
+        qw = (m10 - m01) / S;
+        qx = (m02 + m20) / S;
+        qy = (m12 + m21) / S;
+        qz = 0.25 * S;
+    }
+    return;
+}
+
 void NodeArucoTracking::drawColoredSegment(cv::Mat& img, const std::string& text, const cv::Scalar& color, cv::Point& position, double fontsize, int thickness, int* x_offset) {
-int baseline = 0;
-int fontFace = cv::FONT_HERSHEY_SIMPLEX;
-cv::Size textSize = cv::getTextSize(text, fontFace, fontsize, thickness, &baseline);
+    int baseline = 0;
+    int fontFace = cv::FONT_HERSHEY_SIMPLEX;
+    cv::Size textSize = cv::getTextSize(text, fontFace, fontsize, thickness, &baseline);
 
-cv::putText(img, text, 
-cv::Point(position.x + *x_offset, position.y), 
-fontFace, fontsize, color, thickness);
+    cv::putText(img, text, 
+    cv::Point(position.x + *x_offset, position.y), 
+    fontFace, fontsize, color, thickness);
 
-*x_offset += textSize.width;
+    *x_offset += textSize.width;
 }
 

@@ -33,7 +33,7 @@ std::shared_ptr<NodeBase> NodeDelayMesurmente::createNewClassInstance(int unique
 std::vector<Enums::MessageType> NodeDelayMesurmente::getInMessageTypes(){
     std::vector<Enums::MessageType> inMessageTypes;
     inMessageTypes.push_back(Enums::MessageType::PICTURE);
-
+    inMessageTypes.push_back(Enums::MessageType::INT);
     return inMessageTypes;
 }
 
@@ -70,18 +70,29 @@ void NodeDelayMesurmente::drawNodeParams(){
     ImGui::Text("Baudrate:");
     ImGui::SameLine();
     ImGui::DragInt("##brate", &this->baudRate, 1.0f, 0, 1000000);
-    ImGui::Text("Test period:");
-    ImGui::SameLine();
-    ImGui::DragInt("##period", &this->test_period, 1.0f, 0, 1000000);
-    ImGui::Checkbox("Start Periodic Testing", &this->isPeriodicTest);
-    if (ImGui::Button("Set Port")) {
-        this->disconnect();
-        this->using_port=std::string(port);
-        this->connect(this->using_port, this->baudRate);
-    }
-    if (ImGui::Button("TEST")) {
-        this->startTest=true;
-        this->lineTime=Util::timeSinceEpochMicroseconds();
+    ImGui::Checkbox("Syncronised testing mode", &this->syncedTest);
+    if(!this->syncedTest){
+        ImGui::Text("Test period:");
+        ImGui::SameLine();
+        ImGui::DragInt("##period", &this->test_period, 1.0f, 0, 1000000);
+        ImGui::Checkbox("Start Periodic Testing", &this->isPeriodicTest);
+        if (ImGui::Button("Set Port")) {
+            this->disconnect();
+            this->using_port=std::string(port);
+            this->connect(this->using_port, this->baudRate);
+        }
+        if (ImGui::Button("TEST")) {
+            this->startTest=true;
+            this->lineTime=Util::timeSinceEpochMicroseconds();
+        } 
+    }else{
+        ImGui::Checkbox("Initiator", &this->initiator);
+        if(this->initiator){
+            ImGui::Text("Test period:");
+            ImGui::SameLine();
+            ImGui::DragInt("##period", &this->test_period, 1.0f, 0, 1000000);
+            ImGui::Checkbox("Start Periodic Testing", &this->isPeriodicTest);
+        }
     }
     if (this->isConnected()){
         ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 255, 0, 255));
@@ -461,6 +472,13 @@ void NodeDelayMesurmente::drawNodeWork(){
 
 void NodeDelayMesurmente::recieve(std::shared_ptr<MessageBase> message, int connectorId){
     std::shared_ptr<ConnectorBase> connector = this->getConnector(connectorId);
+
+    if(connector->connectorMessageType == Enums::MessageType::INT){
+        if(this->syncedTest && !this->initiator) {this->startTest = true; this->freetotest=true;}
+        if(this->syncedTest && this->initiator) this->freetotest = true;
+
+    }
+
     this->LastMessage = message;
 
     if(connector->connectorMessageType == Enums::MessageType::PICTURE){
@@ -529,7 +547,7 @@ void NodeDelayMesurmente::recieve(std::shared_ptr<MessageBase> message, int conn
         }
         // cv::imshow("blobs",msg->data->second);
         // cv::waitKey(1);
-        if(this->startTest){
+        if(this->startTest && this->freetotest){
             if(this->isConnected()){
                 this->initiateTest(msg->data->second);
                 this->test_timer=NULL;
@@ -611,7 +629,8 @@ bool NodeDelayMesurmente::testDelay(cv::Mat image){
             this->startTest=false;
             printf("Time limit (No Detection in %d ms)!!!", this->maxTime);
             // this->disconnect();
-            return false;
+            this->lastDelay=-1;
+            return true;
         }
         else
         if(count>this->lastBlobCount){
@@ -657,9 +676,7 @@ void NodeDelayMesurmente::initiateTest(cv::Mat image){
                         // printf("Found INT connector, sending... %d\n",delayMsg->data);
                         this->send(delayMsg, connector);
                     }
-                }
-                
-               
+                }  
             }
             if(!this->isTesting){
                 this->sentRequest = false;
@@ -667,7 +684,10 @@ void NodeDelayMesurmente::initiateTest(cv::Mat image){
                 this->response = false;
                 this->ledOn=false;
                 this->disconnect();
-                Util::delay(20);
+                if(this->syncedTest){
+                    this->freetotest = false;
+                }
+                // Util::delay(20);
             }
         }
         else{
@@ -682,6 +702,9 @@ void NodeDelayMesurmente::initiateTest(cv::Mat image){
                     this->response = false;
                     printf("Timed Out (No Response in %d ms)!!!",this->timeOut);
                     this->disconnect();
+                    if(this->syncedTest){
+                        this->freetotest = false;
+                    }
                 }
             }
         }

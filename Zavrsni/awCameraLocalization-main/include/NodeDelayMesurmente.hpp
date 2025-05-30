@@ -66,6 +66,9 @@ public:
     bool isTesting = false;
     bool useAvg = false; //always fals (not in use)
     bool isPeriodicTest = false;
+    bool syncedTest = false;
+    bool freetotest = true;
+    bool initiator = false;
 
     char port[128] = "COM_"; // ARDUINO port
     std::string using_port;

@@ -594,6 +594,8 @@ void NodeSourceStream::connectionRemoved(int connectorId, int connectionId){
 
 void NodeSourceStream::recieve(std::shared_ptr<MessageBase> message, int connectorId) {
     std::shared_ptr<Message<int>> msg = std::dynamic_pointer_cast<Message<int>>(message);
-    this->openedStream->streamLagInMilisecond=msg->data;
-    printf("NodeSourceStream recieved %d\n", msg->data);
+    if(msg->data > 0){
+        this->openedStream->streamLagInMilisecond=msg->data;
+    }
+    // printf("NodeSourceStream recieved %d\n", msg->data);
 }
