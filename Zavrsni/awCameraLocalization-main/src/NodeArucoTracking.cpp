@@ -90,7 +90,7 @@ void NodeArucoTracking::drawNodeWork(){
     if(ImGui::InputTextWithHint("##ip", "0.0.0.0", this->ipBuffer, sizeof(this->ipBuffer)))
         this->ip=this->ipBuffer;
     ImGui::SameLine();
-    ImGui::InputInt("port",&this->port);
+    ImGui::DragInt("port",&this->port);
     ImGui::SameLine();
     if(this->initialised) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 1.0f, 0.0f, 1.0f)); //green
     else ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.5f, 1.0f, 1.0f)); //blue

@@ -171,16 +171,16 @@ void NodeSourceStream::drawNodeParams(){
         ImGui::PushItemWidth(50);
         ImGui::Text("W: ");
         ImGui::SameLine();
-        ImGui::DragInt("##W:",&this->boardW,1.0f,0);
+        ImGui::DragInt("##W:",&this->boardW,1.0f,1);
         ImGui::SameLine();
         ImGui::Text("H: ");
         ImGui::SameLine();
-        ImGui::DragInt("##H:",&this->boardH,1.0f,0);
+        ImGui::DragInt("##H:",&this->boardH,1.0f,1);
         ImGui::PopItemWidth();
         ImGui::Text("squer size: ");
         ImGui::PushItemWidth(60);
         ImGui::SameLine();
-        ImGui::DragFloat("mm",&this->boardSQR,0.1f,0.0f);
+        ImGui::DragFloat("mm",&this->boardSQR,0.1f,0.000001f);
         ImGui::PopItemWidth();
 
         ImGui::Text("Undistort: ");
