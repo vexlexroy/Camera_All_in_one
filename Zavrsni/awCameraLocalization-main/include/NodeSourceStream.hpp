@@ -49,9 +49,9 @@ class NodeSourceStream: public NodeSource{
         std::shared_ptr<FrameCam> openedStream;
 
         
-        int boardH=0;
-        int boardW=0;
-        float boardSQR=0.0f;
+        int boardH=7;
+        int boardW=9;
+        float boardSQR=18.5f;
 
         NodeSourceStream(int uniqueId);
         std::shared_ptr<NodeBase> createNewClassInstance(int uniqueId) override;

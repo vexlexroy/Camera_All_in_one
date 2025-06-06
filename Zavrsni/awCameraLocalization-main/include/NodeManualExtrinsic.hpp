@@ -45,6 +45,8 @@ public:
     bool secondCamShouldIntrinsicalyCorrect = false;
 
     bool shouldAutoChessboardCalibrate = false;
+    int W=9;
+    int H=7;
 
     bool showEpipolarLines = true;
 

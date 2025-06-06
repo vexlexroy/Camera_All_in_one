@@ -259,6 +259,11 @@ void NodeManualExtrinsic::drawNodeParams(){
         
         ImGui::EndTable();
     }
+    ImGui::Text("auto board size:");
+    ImGui::SameLine();
+    ImGui::DragInt("W", &this->W);
+    ImGui::SameLine();
+    ImGui::DragInt("H", &this->H);
     //ImGui::DragInt("group-cnt", &this->blobGroupsCnt, 1.0, 10, 2000);
     //ImGui::Separator();
     //ImGui::DragInt("viewerTime", &this->viewerTime, 1.0, 100, 1000);
@@ -758,7 +763,7 @@ void NodeManualExtrinsic::drawNodeWork(){
         if(shouldAutoChessboardCalibrate)
         {
             printf("SHould try to autochessboardcalibrate\n");
-            cv::Size patternSize(5, 3); // 4 columns, 3 rows
+            cv::Size patternSize(this->W, this->H); //TODO // 4 columns, 3 rows 
 
             // Points for storing detected corners
             std::vector<cv::Point2f> corners1, corners2;

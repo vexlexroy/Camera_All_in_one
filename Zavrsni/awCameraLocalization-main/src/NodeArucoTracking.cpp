@@ -502,8 +502,13 @@ std::shared_ptr<FrameRelation> NodeArucoTracking::calculateExtrinsicForParametar
     std::vector<std::shared_ptr<FrameRelation>> path;
     std::string current = frameDes;
     while (current != frameSrc) {
-        path.push_back(parent[current]);
-        current = parent[current]->frame_src->frameNickName;
+        auto currentRel = parent[current];
+        std::cout << "src: " << currentRel->frame_src->frameNickName 
+                << " dest: " << currentRel->frame_destination->frameNickName << "\n";
+        std::cout << "rel: " << currentRel->transformation_matrix << "\n";
+        std::cout << "dist: " << currentRel->distance_between_cams_in_cm << "\n" <<"\n";
+        current = currentRel->frame_src->frameNickName;
+        path.push_back(currentRel);
     }
     std::reverse(path.begin(), path.end());
     // combine transformations
@@ -660,7 +665,7 @@ void NodeArucoTracking::sendData(std::string cam, long long int tstamp, long lon
     frameData["cam"] = cam;
     frameData["time"] = tstamp;
     frameData["cam_delay"] = delay;
-    frameData["total_delay"] = delay2;
+    frameData["processing_delay"] = delay2;
     frameData["data"] = markerData;
     if(!markerData.empty()){
         // std::cout << frameData.dump() << "\n";
