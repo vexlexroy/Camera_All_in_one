@@ -346,7 +346,8 @@ void NodeArucoTracking::getValWorlds(){
                     (cam == rels->frame_destination->frameNickName || cam == rels->frame_src->frameNickName)
                     && (frame->frameNickName == rels->frame_destination->frameNickName || frame->frameNickName == rels->frame_src->frameNickName)
                 ){
-                    this->availableWorlds.push_back(frame->frameNickName);
+                   if(std::find(this->availableWorlds.begin(), this->availableWorlds.end(), frame->frameNickName) == this->availableWorlds.end()) 
+                        this->availableWorlds.push_back(frame->frameNickName);
                 }
             }
         }
