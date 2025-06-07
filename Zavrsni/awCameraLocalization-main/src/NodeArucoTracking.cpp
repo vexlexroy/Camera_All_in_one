@@ -432,7 +432,7 @@ void NodeArucoTracking::drawWorldSelector(){
 //void NodeArucoTracking::drawMainCamSelector(){}
 std::shared_ptr<FrameRelation> NodeArucoTracking::calculateExtrinsicForParametars(std::string frameSrc, std::string frameDes) {
 
-    if(frameSrc == frameDes){
+    if(frameSrc == frameDes){ // singular if its same
         auto singularRel = std::make_shared<FrameRelation>();
         singularRel->distance_between_cams_in_cm=1.0;
         singularRel->frame_destination = GlobalParams::getInstance().getFrame(frameDes);
@@ -457,7 +457,7 @@ std::shared_ptr<FrameRelation> NodeArucoTracking::calculateExtrinsicForParametar
             invertedRel->frame_src = rel->frame_destination;
             invertedRel->frame_destination = rel->frame_src;
             invertedRel->distance_between_cams_in_cm = rel->distance_between_cams_in_cm;
-            invertedRel->transformation_matrix = rel->transformation_matrix.inv();
+            invertedRel->transformation_matrix = rel->transformation_matrix.clone().inv();
             invertedRel->transformation_matrix_reprojection_error = rel->transformation_matrix_reprojection_error;
             GlobalParams::getInstance().addNewRelation(invertedRel);
             return invertedRel;
@@ -487,7 +487,7 @@ std::shared_ptr<FrameRelation> NodeArucoTracking::calculateExtrinsicForParametar
                 invertedRel->frame_src = rel->frame_destination;
                 invertedRel->frame_destination = rel->frame_src;
                 invertedRel->distance_between_cams_in_cm = rel->distance_between_cams_in_cm;
-                invertedRel->transformation_matrix = rel->transformation_matrix.inv();
+                invertedRel->transformation_matrix = rel->transformation_matrix.clone().inv();
                 invertedRel->transformation_matrix_reprojection_error = rel->transformation_matrix_reprojection_error;
                 parent[rel->frame_src->frameNickName] = invertedRel;
                 q.push(rel->frame_src->frameNickName);
@@ -510,10 +510,11 @@ std::shared_ptr<FrameRelation> NodeArucoTracking::calculateExtrinsicForParametar
         current = currentRel->frame_src->frameNickName;
         path.push_back(currentRel);
     }
-    std::reverse(path.begin(), path.end());
+    // std::reverse(path.begin(), path.end());
     // combine transformations
     cv::Mat T_total = cv::Mat::eye(4, 4, CV_64F);
     float maxreperror = 0.0;
+    std::cout << "\n";
     for (auto& rel : path) {
         if (maxreperror < rel->transformation_matrix_reprojection_error) {
             maxreperror = rel->transformation_matrix_reprojection_error;
@@ -523,22 +524,24 @@ std::shared_ptr<FrameRelation> NodeArucoTracking::calculateExtrinsicForParametar
         cv::Mat T = rel->transformation_matrix.clone();
     
         // Scale only the translation part
-        T.at<double>(0, 3) *= rel->distance_between_cams_in_cm/100.0;
-        T.at<double>(1, 3) *= rel->distance_between_cams_in_cm/100.0;
-        T.at<double>(2, 3) *= rel->distance_between_cams_in_cm/100.0;
+        T.at<double>(0, 3) *= rel->distance_between_cams_in_cm;
+        T.at<double>(1, 3) *= rel->distance_between_cams_in_cm;
+        T.at<double>(2, 3) *= rel->distance_between_cams_in_cm;
     
         // Apply transformation
-        T_total = T_total * T;
+        std::cout << rel->frame_src->frameNickName << "->" << rel->frame_destination->frameNickName << "*";
+        T_total = T_total.clone() * T.clone();
     }
+    std::cout << "\n";
     // Create the final relation
     auto newRel = std::make_shared<FrameRelation>();
     newRel->frame_src = GlobalParams::getInstance().getFrame(frameSrc);
     newRel->frame_destination = GlobalParams::getInstance().getFrame(frameDes);
-    newRel->distance_between_cams_in_cm = cv::norm(T_total(cv::Rect(3, 0, 1, 3)))*100;
-    T_total.at<double>(0,3)/=(newRel->distance_between_cams_in_cm/100.0);
-    T_total.at<double>(1,3)/=(newRel->distance_between_cams_in_cm/100.0);
-    T_total.at<double>(2,3)/=(newRel->distance_between_cams_in_cm/100.0);
-    newRel->transformation_matrix = T_total;
+    newRel->distance_between_cams_in_cm = cv::norm(T_total.clone()(cv::Rect(3, 0, 1, 3)));
+    T_total.at<double>(0,3)/=(newRel->distance_between_cams_in_cm);
+    T_total.at<double>(1,3)/=(newRel->distance_between_cams_in_cm);
+    T_total.at<double>(2,3)/=(newRel->distance_between_cams_in_cm);
+    newRel->transformation_matrix = T_total.clone();
     newRel->transformation_matrix_reprojection_error = maxreperror;
     GlobalParams::getInstance().addNewRelation(newRel);
     return newRel;
@@ -564,9 +567,9 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
         return img;
     }
     auto transform = relation->transformation_matrix.clone();
-    transform.at<double>(0,3)*=relation->distance_between_cams_in_cm/100.0;
-    transform.at<double>(1,3)*=relation->distance_between_cams_in_cm/100.0;
-    transform.at<double>(2,3)*=relation->distance_between_cams_in_cm/100.0;
+    transform.at<double>(0,3)*=relation->distance_between_cams_in_cm;
+    transform.at<double>(1,3)*=relation->distance_between_cams_in_cm;
+    transform.at<double>(2,3)*=relation->distance_between_cams_in_cm;
     auto translation = transform(cv::Rect(3, 0, 1, 3));
     auto rotation = transform(cv::Rect(0, 0, 3, 3));
 
@@ -578,10 +581,10 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
     if(ids.empty()) return img; 
     
     std::vector<cv::Point3f> objectPoints = {
-        cv::Point3f(-this->markerSize/200,  this->markerSize/200, 0), // Top-left
-        cv::Point3f( this->markerSize/200,  this->markerSize/200, 0), // Top-right
-        cv::Point3f( this->markerSize/200, -this->markerSize/200, 0), // Bottom-right
-        cv::Point3f(-this->markerSize/200, -this->markerSize/200, 0)  // Bottom-left
+        cv::Point3f(-markerSize/2.0f, -markerSize/2.0f, 0), // Bottom-left
+        cv::Point3f( markerSize/2.0f, -markerSize/2.0f, 0), // Bottom-right
+        cv::Point3f( markerSize/2.0f,  markerSize/2.0f, 0), // Top-right
+        cv::Point3f(-markerSize/2.0f,  markerSize/2.0f, 0)  // Top-left
     };
 
     std::vector<cv::Mat>poses;
@@ -592,7 +595,7 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
                     intrinsics.intrinsicMatrix,
                     intrinsics.distortionCoef,
                     rvec, tvec);
-        cv::drawFrameAxes(img, intrinsics.intrinsicMatrix, intrinsics.distortionCoef, rvec, tvec, markerSize/200.0);
+        cv::drawFrameAxes(img, intrinsics.intrinsicMatrix, intrinsics.distortionCoef, rvec, tvec, markerSize/2.0);
 
         cv::Mat R;
         cv::Rodrigues(rvec, R);
@@ -601,22 +604,22 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
         pose.at<double>(0, 3) = tvec[0];
         pose.at<double>(1, 3) = tvec[1];
         pose.at<double>(2, 3) = tvec[2];
-        pose = transform*pose; 
-        poses.push_back(pose);
+        cv::Mat tpose = transform*pose; 
+        poses.push_back(tpose);
         // draw part
         int id = ids[i];
-        float x = pose.at<double>(0,3);
-        float y = pose.at<double>(1,3);
-        float z = pose.at<double>(2,3);
+        float x = tpose.at<double>(0,3);
+        float y = tpose.at<double>(1,3);
+        float z = tpose.at<double>(2,3);
         double yaw,roll,pitch;
         double qw,qx,qy,qz;
         this->rotationMatrixToEulerAngles(pose(cv::Rect(0, 0, 3, 3)),roll,pitch,yaw);
         this->rotationMatrixToQuaternion(pose(cv::Rect(0, 0, 3, 3)), qw,qx,qy,qz);
         if(this->showPositiontxt){
             std::stringstream ss_x, ss_y, ss_z, ss_roll, ss_pitch, ss_yaw;
-            ss_x << "x: " << std::fixed << std::setprecision(1) << x*100 << " ";
-            ss_y << "y: " << std::fixed << std::setprecision(1) << y*100 << " ";
-            ss_z << "z: " << std::fixed << std::setprecision(1) << z*100 << "cm";
+            ss_x << "x: " << std::fixed << std::setprecision(1) << x << " ";
+            ss_y << "y: " << std::fixed << std::setprecision(1) << y << " ";
+            ss_z << "z: " << std::fixed << std::setprecision(1) << z << "cm";
             ss_roll << "r: "<< std::fixed << std::setprecision(1) << roll;
             ss_pitch << "p: "<< std::fixed << std::setprecision(1) << pitch;
             ss_yaw << "y: "<< std::fixed << std::setprecision(1) << yaw;
@@ -638,9 +641,9 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
         }
         nlohmann::json markerData;
         markerData["id"] = id;
-        markerData["x"] = x;
-        markerData["y"] = y;
-        markerData["z"] = z;
+        markerData["x"] = x/100.0f;
+        markerData["y"] = y/100.0f;
+        markerData["z"] = z/100.0f;
         markerData["yaw"] = yaw;
         markerData["roll"] = roll;
         markerData["pitch"] = pitch;
