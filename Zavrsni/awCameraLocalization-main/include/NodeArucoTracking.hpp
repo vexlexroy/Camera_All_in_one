@@ -40,9 +40,10 @@ public:
     boost::asio::ip::udp::endpoint conection;
     std::string ip;
     char ipBuffer[256] = {0};
-    int port;
+    int port = 12345;
     bool initialised = false;
     bool sending = false;
+    bool showWorld=false;
 
 
 
@@ -70,7 +71,7 @@ public:
     void getValWorlds();
     cv::Mat arucoPositions(cv::Mat img, std::string camframe, std::string worldFrame, std::vector<cv::Mat>& allposes, std::vector<int>& allids, nlohmann::json& jsonData);
     void sendData(std::string cam, long long int tstamp, long long int delay, long long int delay2, nlohmann::json markerData);
-
+    cv::Mat NodeArucoTracking::drawworldFrame(cv::Mat img, std::string cam, std::string world);
 
     void rotationMatrixToEulerAngles(const cv::Mat& R, double& roll, double& pitch, double& yaw);
     void rotationMatrixToQuaternion(const cv::Mat& R, double& qw,double& qx,double& qy,double& qz);

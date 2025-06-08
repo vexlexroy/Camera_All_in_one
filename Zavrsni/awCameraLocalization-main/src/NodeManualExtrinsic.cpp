@@ -606,7 +606,7 @@ void NodeManualExtrinsic::drawNodeWork(){
                     //rotation matrix must be in good format..., and translation must be normalized, and new parameter distance_between_cams_in_cm should exist 
 
                     newFrameRelation->transformation_matrix = cv::Mat::eye(4, 4, CV_64F); // Initialize as identity matrix
-                    cv::Mat columnCorrectRotationMatrix = this->custom_frame_rotationMatrix.clone();//.t();
+                    cv::Mat columnCorrectRotationMatrix = this->custom_frame_rotationMatrix.clone().t(); //CHECK
 
                     // printf("Prosao1\n");
                     for (int row = 0; row < 3; ++row) {
@@ -2272,6 +2272,7 @@ void NodeManualExtrinsic::drawNodeWork(){
             
             if(transformation_matrix_cam1 != nullptr)
             {
+                std::cout << "\ntransformation: " << *transformation_matrix_cam1 << "\n";
                 cv::Point3f pointOrigin;
                 pointOrigin.x = transformation_matrix_cam1->at<double>(0, 3);
                 pointOrigin.y = transformation_matrix_cam1->at<double>(1, 3);

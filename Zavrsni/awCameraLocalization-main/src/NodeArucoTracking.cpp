@@ -260,6 +260,10 @@ void NodeArucoTracking::drawNodeWork(){
         ImGui::Text("font size:");
         ImGui::SameLine();
         ImGui::DragFloat("##font",&this->fontsize,0.5,0.1);
+        ImGui::SameLine();
+        ImGui::Text("show world:");
+        ImGui::SameLine();
+        ImGui::Checkbox("##showworld",&this->showWorld);
 
         
         ImGui::EndPopup();
@@ -288,14 +292,19 @@ void NodeArucoTracking::recieve(std::shared_ptr<MessageBase> message, int connec
                     std::vector<int> ids;
                     nlohmann::json markData = nullptr;
                     // Process the image
-                    cv::Mat processedImage = this->arucoPositions(msg->data->first.clone(), camName, this->selectedWorld, poses, ids, markData);
+                    cv::Mat img = msg->data->first.clone();
+                    cv::Mat processedImage = this->arucoPositions(img, camName, this->selectedWorld, poses, ids, markData);
                     if(this->sending && this->initialised)
                         this->sendData(camName, msg->getBaseTimestamp(), msg->startLagDuration, msg->getBaseDelay(), markData);
                     
                     // Create the pair correctly
                     if(msg->camOrigin->frameNickName == this->selectedCameraName) {
+                        if(this->showWorld){
+                            processedImage=this->drawworldFrame(processedImage,camName,this->selectedWorld);
+                        }
                         this->lastMsg = std::make_unique<std::pair<cv::Mat, cv::Mat>>(processedImage,msg->data->second.clone());
                     }
+                    
                 }
                 else {
                     if(msg->camOrigin->frameNickName == this->selectedCameraName) {
@@ -432,6 +441,7 @@ void NodeArucoTracking::drawWorldSelector(){
 
 //void NodeArucoTracking::drawMainCamSelector(){}
 std::shared_ptr<FrameRelation> NodeArucoTracking::calculateExtrinsicForParametars(std::string frameSrc, std::string frameDes) {
+    
 
     if(frameSrc == frameDes){ // singular if its same
         auto singularRel = std::make_shared<FrameRelation>();
@@ -460,7 +470,7 @@ std::shared_ptr<FrameRelation> NodeArucoTracking::calculateExtrinsicForParametar
             invertedRel->distance_between_cams_in_cm = rel->distance_between_cams_in_cm;
             invertedRel->transformation_matrix = rel->transformation_matrix.clone().inv();
             invertedRel->transformation_matrix_reprojection_error = rel->transformation_matrix_reprojection_error;
-            GlobalParams::getInstance().addNewRelation(invertedRel);
+            // GlobalParams::getInstance().addNewRelation(invertedRel);
             return invertedRel;
         }
     }
@@ -669,7 +679,7 @@ void NodeArucoTracking::sendData(std::string cam, long long int tstamp, long lon
     frameData["cam"] = cam;
     frameData["time"] = tstamp;
     frameData["cam_delay"] = delay;
-    frameData["processing_delay"] = delay2;
+    frameData["processing_delay"] = (delay2-delay*1000);
     frameData["data"] = markerData;
     if(!markerData.empty()){
         // std::cout << frameData.dump() << "\n";
@@ -677,6 +687,40 @@ void NodeArucoTracking::sendData(std::string cam, long long int tstamp, long lon
         this->socket->send_to(boost::asio::buffer(frameData.dump()),this->conection);
     }
     return;
+}
+
+cv::Mat NodeArucoTracking::drawworldFrame(cv::Mat img, std::string cam, std::string world){
+    auto relation = this->calculateExtrinsicForParametars(world,cam);
+    cv::Mat transform = relation->transformation_matrix.clone();
+    auto frames = GlobalParams::getInstance().getCamFrames();
+    Structs::IntrinsicCamParams intrinsics;
+    for (auto& cams : frames){
+        if(cams->frameNickName == cam){
+            intrinsics = cams->intrinsicParams;
+        }
+    }
+    std::vector<cv::Point3f> worldPoints;
+    worldPoints.emplace_back(0, 0, 0);   // Origin
+    worldPoints.emplace_back(relation->distance_between_cams_in_cm*0.3*this->fontsize, 0, 0); // X axis (red)
+    worldPoints.emplace_back(0, relation->distance_between_cams_in_cm*0.3*this->fontsize, 0); // Y axis (green)
+    worldPoints.emplace_back(0, 0, relation->distance_between_cams_in_cm*0.3*this->fontsize); // Z axis (blue)
+
+    cv::Mat Rwc = transform(cv::Rect(0, 0, 3, 3)); // Top-left 3x3
+    cv::Mat twc = transform(cv::Rect(3, 0, 1, 3)); // Top-right 3x1
+    twc*=relation->distance_between_cams_in_cm;
+    cv::Mat rvec;
+    cv::Rodrigues(Rwc, rvec);
+
+    std::cout << "\ntransform: " << twc << "\nrotation: " << Rwc;
+
+    std::vector<cv::Point2f> imagePoints;
+    cv::projectPoints(worldPoints, rvec, twc, intrinsics.intrinsicMatrix, intrinsics.distortionCoef, imagePoints);
+
+    // Draw the axes on the image
+    cv::line(img, imagePoints[0], imagePoints[1], cv::Scalar(0, 0, 255), 2); // X - red
+    cv::line(img, imagePoints[0], imagePoints[2], cv::Scalar(0, 255, 0), 2); // Y - green
+    cv::line(img, imagePoints[0], imagePoints[3], cv::Scalar(255, 0, 0), 2); // Z - blue
+    return img;
 }
 
 
