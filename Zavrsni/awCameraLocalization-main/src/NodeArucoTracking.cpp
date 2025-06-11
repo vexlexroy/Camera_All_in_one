@@ -299,9 +299,9 @@ void NodeArucoTracking::recieve(std::shared_ptr<MessageBase> message, int connec
                     
                     // Create the pair correctly
                     if(msg->camOrigin->frameNickName == this->selectedCameraName) {
-                        if(this->showWorld){
-                            processedImage=this->drawworldFrame(processedImage,camName,this->selectedWorld);
-                        }
+                        // if(this->showWorld){
+                        //     processedImage=this->drawworldFrame(processedImage,camName,this->selectedWorld);
+                        // }
                         this->lastMsg = std::make_unique<std::pair<cv::Mat, cv::Mat>>(processedImage,msg->data->second.clone());
                     }
                     
@@ -583,12 +583,27 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
     transform.at<double>(2,3)*=relation->distance_between_cams_in_cm;
     auto translation = transform(cv::Rect(3, 0, 1, 3));
     auto rotation = transform(cv::Rect(0, 0, 3, 3));
+    
 
     std::vector<int> ids;
     std::vector<std::vector<cv::Point2f>> corners;
     cv::aruco::ArucoDetector detect;
     detect.setDictionary(this->arucoDictionary);
     detect.detectMarkers(img, corners, ids);
+
+    cv::Mat revTransform = transform.clone().inv();
+    cv::Mat tvecT = revTransform(cv::Rect(3, 0, 1, 3));
+    cv::Mat rT = transform(cv::Rect(0, 0, 3, 3)).clone().t();
+    if(this->showWorld){
+        cv::Mat rvecT;
+        cv::Rodrigues(rT, rvecT);
+        cv::drawFrameAxes(img, intrinsics.intrinsicMatrix, intrinsics.distortionCoef, rvecT, tvecT, markerSize*2, 1);
+    }
+    // cv::Mat T_inv = cv::Mat::eye(4, 4, CV_64F);
+    // rT.copyTo(T_inv(cv::Rect(0, 0, 3, 3)));
+    // tvecT.copyTo(T_inv(cv::Rect(3, 0, 1, 3)));
+    // transform=T_inv.inv();
+
     if(ids.empty()) return img; 
     
     std::vector<cv::Point3f> objectPoints = {
@@ -600,6 +615,7 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
 
     std::vector<cv::Mat>poses;
     nlohmann::json dataArray = nlohmann::json::array();
+
     for(int i=0;i<ids.size();i++){
         cv::Vec3d rvec, tvec;
         cv::solvePnP(objectPoints, corners[i],
@@ -607,6 +623,7 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
                     intrinsics.distortionCoef,
                     rvec, tvec);
         cv::drawFrameAxes(img, intrinsics.intrinsicMatrix, intrinsics.distortionCoef, rvec, tvec, markerSize/2.0);
+        
 
         cv::Mat R;
         cv::Rodrigues(rvec, R);
@@ -615,7 +632,10 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
         pose.at<double>(0, 3) = tvec[0];
         pose.at<double>(1, 3) = tvec[1];
         pose.at<double>(2, 3) = tvec[2];
-        cv::Mat tpose = transform*pose; 
+
+
+        cv::Mat tpose = transform*pose;
+
         poses.push_back(tpose);
         // draw part
         int id = ids[i];
@@ -708,6 +728,22 @@ cv::Mat NodeArucoTracking::drawworldFrame(cv::Mat img, std::string cam, std::str
     cv::Mat Rwc = transform(cv::Rect(0, 0, 3, 3)); // Top-left 3x3
     cv::Mat twc = transform(cv::Rect(3, 0, 1, 3)); // Top-right 3x1
     twc*=relation->distance_between_cams_in_cm;
+
+    // // Compute intrinsic parameters
+    // double fx = intrinsics.intrinsicMatrix.at<double>(0, 0);
+    // double fy = intrinsics.intrinsicMatrix.at<double>(1, 1);
+    // double cx = intrinsics.intrinsicMatrix.at<double>(0, 2);
+    // double cy = intrinsics.intrinsicMatrix.at<double>(1, 2);
+    // // Depth
+    // double Z = twc.at<double>(2, 0);
+    // // Calculate offset for shifting origin from image center to top-left corner
+    // double x_offset = -cx / fx * Z;
+    // double y_offset = -cy / fy * Z;
+    // // Shift translation vector accordingly
+    // cv::Mat twc_shifted = twc.clone();
+    // twc_shifted.at<double>(0, 0) += x_offset;
+    // twc_shifted.at<double>(1, 0) += y_offset;
+
     cv::Mat rvec;
     cv::Rodrigues(Rwc, rvec);
 
