@@ -559,7 +559,7 @@ std::shared_ptr<FrameRelation> NodeArucoTracking::calculateExtrinsicForParametar
 }
 cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std::string worldFrame, std::vector<cv::Mat>& allposes, std::vector<int>& allids, nlohmann::json& jsonData){
     // printf("detecting A\n");
-    auto relation = this->calculateExtrinsicForParametars(camframe, worldFrame);
+    auto relation = this->calculateExtrinsicForParametars(worldFrame, camframe);
     // printf("relation calc\n");
     auto frames = GlobalParams::getInstance().getCamFrames();
     Structs::IntrinsicCamParams intrinsics;
@@ -591,18 +591,19 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
     detect.setDictionary(this->arucoDictionary);
     detect.detectMarkers(img, corners, ids);
 
-    cv::Mat revTransform = transform.clone().inv();
-    cv::Mat tvecT = revTransform(cv::Rect(3, 0, 1, 3));
-    cv::Mat rT = transform(cv::Rect(0, 0, 3, 3)).clone().t();
+    cv::Mat revTransform = transform.clone();//.inv();
+    if(camframe==worldFrame){
+        revTransform = transform.clone()*-1;//.inv();
+    }
+    cv::Mat tvecT = revTransform(cv::Rect(3, 0, 1, 3)).clone();
+    cv::Mat rT = revTransform(cv::Rect(0, 0, 3, 3)).clone();
+    
     if(this->showWorld){
         cv::Mat rvecT;
-        cv::Rodrigues(rT, rvecT);
+        cv::Rodrigues(rT, rvecT); 
         cv::drawFrameAxes(img, intrinsics.intrinsicMatrix, intrinsics.distortionCoef, rvecT, tvecT, markerSize*2, 1);
     }
-    // cv::Mat T_inv = cv::Mat::eye(4, 4, CV_64F);
-    // rT.copyTo(T_inv(cv::Rect(0, 0, 3, 3)));
-    // tvecT.copyTo(T_inv(cv::Rect(3, 0, 1, 3)));
-    // transform=T_inv.inv();
+    
 
     if(ids.empty()) return img; 
     
@@ -708,57 +709,6 @@ void NodeArucoTracking::sendData(std::string cam, long long int tstamp, long lon
     }
     return;
 }
-
-cv::Mat NodeArucoTracking::drawworldFrame(cv::Mat img, std::string cam, std::string world){
-    auto relation = this->calculateExtrinsicForParametars(world,cam);
-    cv::Mat transform = relation->transformation_matrix.clone();
-    auto frames = GlobalParams::getInstance().getCamFrames();
-    Structs::IntrinsicCamParams intrinsics;
-    for (auto& cams : frames){
-        if(cams->frameNickName == cam){
-            intrinsics = cams->intrinsicParams;
-        }
-    }
-    std::vector<cv::Point3f> worldPoints;
-    worldPoints.emplace_back(0, 0, 0);   // Origin
-    worldPoints.emplace_back(relation->distance_between_cams_in_cm*0.3*this->fontsize, 0, 0); // X axis (red)
-    worldPoints.emplace_back(0, relation->distance_between_cams_in_cm*0.3*this->fontsize, 0); // Y axis (green)
-    worldPoints.emplace_back(0, 0, relation->distance_between_cams_in_cm*0.3*this->fontsize); // Z axis (blue)
-
-    cv::Mat Rwc = transform(cv::Rect(0, 0, 3, 3)); // Top-left 3x3
-    cv::Mat twc = transform(cv::Rect(3, 0, 1, 3)); // Top-right 3x1
-    twc*=relation->distance_between_cams_in_cm;
-
-    // // Compute intrinsic parameters
-    // double fx = intrinsics.intrinsicMatrix.at<double>(0, 0);
-    // double fy = intrinsics.intrinsicMatrix.at<double>(1, 1);
-    // double cx = intrinsics.intrinsicMatrix.at<double>(0, 2);
-    // double cy = intrinsics.intrinsicMatrix.at<double>(1, 2);
-    // // Depth
-    // double Z = twc.at<double>(2, 0);
-    // // Calculate offset for shifting origin from image center to top-left corner
-    // double x_offset = -cx / fx * Z;
-    // double y_offset = -cy / fy * Z;
-    // // Shift translation vector accordingly
-    // cv::Mat twc_shifted = twc.clone();
-    // twc_shifted.at<double>(0, 0) += x_offset;
-    // twc_shifted.at<double>(1, 0) += y_offset;
-
-    cv::Mat rvec;
-    cv::Rodrigues(Rwc, rvec);
-
-    std::cout << "\ntransform: " << twc << "\nrotation: " << Rwc;
-
-    std::vector<cv::Point2f> imagePoints;
-    cv::projectPoints(worldPoints, rvec, twc, intrinsics.intrinsicMatrix, intrinsics.distortionCoef, imagePoints);
-
-    // Draw the axes on the image
-    cv::line(img, imagePoints[0], imagePoints[1], cv::Scalar(0, 0, 255), 2); // X - red
-    cv::line(img, imagePoints[0], imagePoints[2], cv::Scalar(0, 255, 0), 2); // Y - green
-    cv::line(img, imagePoints[0], imagePoints[3], cv::Scalar(255, 0, 0), 2); // Z - blue
-    return img;
-}
-
 
 
 void NodeArucoTracking::rotationMatrixToEulerAngles(const cv::Mat& R, double& roll, double& pitch, double& yaw) {
