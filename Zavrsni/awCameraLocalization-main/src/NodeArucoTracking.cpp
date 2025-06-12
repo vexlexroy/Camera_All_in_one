@@ -540,7 +540,7 @@ std::shared_ptr<FrameRelation> NodeArucoTracking::calculateExtrinsicForParametar
         T.at<double>(2, 3) *= rel->distance_between_cams_in_cm;
     
         // Apply transformation
-        std::cout << rel->frame_src->frameNickName << "->" << rel->frame_destination->frameNickName << "*";
+        std::cout <<rel->frame_destination->frameNickName <<"_"<<rel->frame_src->frameNickName  << "*";
         T_total = T_total.clone() * T.clone();
     }
     std::cout << "\n";
@@ -559,7 +559,7 @@ std::shared_ptr<FrameRelation> NodeArucoTracking::calculateExtrinsicForParametar
 }
 cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std::string worldFrame, std::vector<cv::Mat>& allposes, std::vector<int>& allids, nlohmann::json& jsonData){
     // printf("detecting A\n");
-    auto relation = this->calculateExtrinsicForParametars(worldFrame, camframe);
+    auto relation = this->calculateExtrinsicForParametars(camframe, worldFrame);
     // printf("relation calc\n");
     auto frames = GlobalParams::getInstance().getCamFrames();
     Structs::IntrinsicCamParams intrinsics;
@@ -591,10 +591,7 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
     detect.setDictionary(this->arucoDictionary);
     detect.detectMarkers(img, corners, ids);
 
-    cv::Mat revTransform = transform.clone();//.inv();
-    if(camframe==worldFrame){
-        revTransform = transform.clone()*-1;//.inv();
-    }
+    cv::Mat revTransform = transform.clone().inv();
     cv::Mat tvecT = revTransform(cv::Rect(3, 0, 1, 3)).clone();
     cv::Mat rT = revTransform(cv::Rect(0, 0, 3, 3)).clone();
     
@@ -608,10 +605,10 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
     if(ids.empty()) return img; 
     
     std::vector<cv::Point3f> objectPoints = {
-        cv::Point3f(-markerSize/2.0f, -markerSize/2.0f, 0), // Bottom-left
-        cv::Point3f( markerSize/2.0f, -markerSize/2.0f, 0), // Bottom-right
-        cv::Point3f( markerSize/2.0f,  markerSize/2.0f, 0), // Top-right
-        cv::Point3f(-markerSize/2.0f,  markerSize/2.0f, 0)  // Top-left
+        cv::Point3f(-markerSize/2.0f, markerSize/2.0f, 0),
+        cv::Point3f( markerSize/2.0f, markerSize/2.0f, 0), 
+        cv::Point3f( markerSize/2.0f,  -markerSize/2.0f, 0), 
+        cv::Point3f(-markerSize/2.0f,  -markerSize/2.0f, 0)  
     };
 
     std::vector<cv::Mat>poses;
