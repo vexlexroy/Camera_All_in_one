@@ -1,0 +1,208 @@
+{
+    "spatialSpace": {
+        "camFrames": {
+            "0": {
+                "colorThresholdParams": {
+                    "hue": [
+                        -1,
+                        -1
+                    ],
+                    "separation": [
+                        255,
+                        0
+                    ],
+                    "value": [
+                        255,
+                        0
+                    ]
+                },
+                "frameNickName": "camM",
+                "frameUrlName": "rtsp://192.168.1.160/av0_0",
+                "intrinsicParams": {
+                    "distortionCoef": [
+                        [
+                            -0.37065499565328713,
+                            0.13882359549762655,
+                            0.0006148749318558353,
+                            0.0029940903612219166,
+                            -0.023649297729163937
+                        ]
+                    ],
+                    "intrinsicMatrix": [
+                        [
+                            1187.8370644748884,
+                            0.0,
+                            995.2127235056095
+
+                        ],
+                        [
+                            0.0,
+                            1190.607063765803,
+                            516.7187024565177
+                        ],
+                        [
+                            0.0,
+                            0.0,
+                            1.0
+                        ]
+                    ],
+                    "reprojectionError": 0.8419499397277832
+                },
+                "streamLagInMilisecond": 0
+            },
+            "1": {
+                "colorThresholdParams": {
+                    "hue": [
+                        -1,
+                        -1
+                    ],
+                    "separation": [
+                        255,
+                        0
+                    ],
+                    "value": [
+                        255,
+                        0
+                    ]
+                },
+                "frameNickName": "camB",
+                "frameUrlName": "rtsp://192.168.1.161/av0_0",
+                "intrinsicParams": {
+                    "distortionCoef": [
+                        [
+                            -0.37065499565328713,
+                            0.13882359549762655,
+                            0.0006148749318558353,
+                            0.0029940903612219166,
+                            -0.023649297729163937
+                        ]
+                    ],
+                    "intrinsicMatrix": [
+                        [
+                            1187.8370644748884,
+                            0.0,
+                            995.2127235056095
+                        ],
+                        [
+                            0.0,
+                            1190.607063765803,
+                            516.7187024565177
+                        ],
+                        [
+                            0.0,
+                            0.0,
+                            1.0
+                        ]
+                    ],
+                    "reprojectionError": 0.8419499397277832
+                },
+                "streamLagInMilisecond": 0
+            },
+            "2": {
+                "colorThresholdParams": {
+                    "hue": [
+                        -1,
+                        -1
+                    ],
+                    "separation": [
+                        255,
+                        0
+                    ],
+                    "value": [
+                        255,
+                        0
+                    ]
+                },
+                "frameNickName": "camF",
+                "frameUrlName": "rtsp://192.168.1.162/av0_0",
+                "intrinsicParams": {
+                    "distortionCoef": [
+                        [
+                            -0.38960554572199885,
+                            0.16605795661155295,
+                            0.0004128794120847332,
+                            0.00033570457514784665,
+                            -0.0341413551934308
+                        ]
+                    ],
+                    "intrinsicMatrix": [
+                        [
+                            1200.5672364558177,
+                            0.0,
+                            942.1824325278048
+                        ],
+                        [
+                            0.0,
+                            1203.8366336492713,
+                            506.8100985654158
+                        ],
+                        [
+                            0.0,
+                            0.0,
+                            1.0
+                        ]
+                    ],
+                    "reprojectionError": 0.8419499397277832
+                },
+                "streamLagInMilisecond": 0
+            },
+            "3": {
+                "colorThresholdParams": {
+                    "hue": [
+                        -1,
+                        -1
+                    ],
+                    "separation": [
+                        255,
+                        0
+                    ],
+                    "value": [
+                        255,
+                        0
+                    ]
+                },
+                "frameNickName": "laptop",
+                "frameUrlName": "0",
+                "intrinsicParams": {
+                    "distortionCoef": [
+                        [
+                            0.11599818972414463,
+                            -0.18414004985861648,
+                            -0.030925034600943056,
+                            -0.02285821124455789,
+                            0.4416150424410046
+                        ]
+                    ],
+                    "intrinsicMatrix": [
+                        [
+                            1101.9228476861697,
+                            0.0,
+                            24.99457966885907
+                        ],
+                        [
+                            0.0,
+                            1158.2310293541318,
+                            124.0984940178907
+                        ],
+                        [
+                            0.0,
+                            0.0,
+                            1.0
+                        ]
+                    ],
+                    "reprojectionError": 0.8419499397277832
+                },
+                "streamLagInMilisecond": 0
+            }
+        }
+    },
+    "view": {
+        "isShowWork": true
+    },
+    "zoom": {
+        "scaleFactor": 0.5,
+        "scaleFactorMax": 2.0,
+        "scaleFactorMin": 0.10000000149011612,
+        "scaleFactorSpeed": 0.05000000074505806
+    }
+}

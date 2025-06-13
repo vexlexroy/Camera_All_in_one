@@ -408,7 +408,10 @@ void NodeSourceStream::threadLoop(){
                 //cap.open(number, cv::CAP_DSHOW);
             }
             else{
-                cap.open(this->streamFullName.c_str()); //OPEN CAMERA IP
+                // cap = cv::VideoCapture(this->streamFullName.c_str(), cv::CAP_FFMPEG);
+                cap.open(this->streamFullName.c_str(), cv::CAP_FFMPEG); //OPEN CAMERA IP //TODO FIX TIMEOUT
+                std::cout << cv::getBuildInformation() << std::endl;
+                
             }
             
 
@@ -439,7 +442,7 @@ void NodeSourceStream::threadLoop(){
         //Util::delay(1);
 
         cv::Mat newFrame;
-
+        // BLOCKS IF NO FRAME IS PRESENT
         if(cap.read(newFrame)){
             // std::cout << "Native resolution: " << newFrame.cols << "x" << newFrame.rows << std::endl;
             // Only resize if resolution is set and different from native
