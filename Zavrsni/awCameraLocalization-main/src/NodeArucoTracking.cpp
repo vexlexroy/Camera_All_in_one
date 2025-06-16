@@ -605,13 +605,10 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
         cv::Point3f(0, markerSize*2, 0),                 // Y axis
         cv::Point3f(0, 0, markerSize*2)                  // Z axis
         };
-        cv::Mat Rot = revTransform(cv::Rect(0,0,3,3)).clone();
-        cv::Mat tr = revTransform(cv::Rect(3,0,1,3)).clone();
-
         std::vector<cv::Point3f> cam_axes_pts;
         for (auto& pt : world_axes_pts) {
             cv::Mat pt_mat = (cv::Mat_<double>(3,1) << pt.x, pt.y, pt.z);
-            cv::Mat pt_cam = Rot * pt_mat + tr;
+            cv::Mat pt_cam = rT * pt_mat + tvecT;
             cam_axes_pts.emplace_back(pt_cam.at<double>(0), pt_cam.at<double>(1), pt_cam.at<double>(2));
         }
         std::vector<cv::Point2f> image_pts;
@@ -627,20 +624,20 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
     if(ids.empty()) return img; 
     
     std::vector<cv::Point3f> objectPoints = {
-        cv::Point3f(-markerSize/2.0f, -markerSize/2.0f, 0),
+        cv::Point3f(-markerSize/2.0f, markerSize/2.0f, 0),
+        cv::Point3f( markerSize/2.0f, markerSize/2.0f, 0), 
         cv::Point3f( markerSize/2.0f, -markerSize/2.0f, 0), 
-        cv::Point3f( markerSize/2.0f,  markerSize/2.0f, 0), 
-        cv::Point3f(-markerSize/2.0f,  markerSize/2.0f, 0)  
+        cv::Point3f(-markerSize/2.0f,  -markerSize/2.0f, 0)  
     };
 
     std::vector<cv::Mat>poses;
     nlohmann::json dataArray = nlohmann::json::array();
-
+    cv::Mat zeroDistCoeffs = cv::Mat::zeros(intrinsics.distortionCoef.size(), intrinsics.distortionCoef.type());
     for(int i=0;i<ids.size();i++){
         cv::Vec3d rvec, tvec;
         cv::solvePnP(objectPoints, corners[i],
                     intrinsics.intrinsicMatrix,
-                    intrinsics.distortionCoef,
+                    zeroDistCoeffs,
                     rvec, tvec);
         cv::drawFrameAxes(img, intrinsics.intrinsicMatrix, intrinsics.distortionCoef, rvec, tvec, markerSize/2.0);
         
@@ -664,8 +661,8 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
         float z = tpose.at<double>(2,3);
         double yaw,roll,pitch;
         double qw,qx,qy,qz;
-        this->rotationMatrixToEulerAngles(pose(cv::Rect(0, 0, 3, 3)),roll,pitch,yaw);
-        this->rotationMatrixToQuaternion(pose(cv::Rect(0, 0, 3, 3)), qw,qx,qy,qz);
+        this->rotationMatrixToEulerAngles(tpose(cv::Rect(0, 0, 3, 3)),roll,pitch,yaw);
+        this->rotationMatrixToQuaternion(tpose(cv::Rect(0, 0, 3, 3)), qw,qx,qy,qz);
         if(this->showPositiontxt){
             std::stringstream ss_x, ss_y, ss_z, ss_roll, ss_pitch, ss_yaw;
             ss_x << "x: " << std::fixed << std::setprecision(1) << x << " ";
