@@ -568,6 +568,7 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
             intrinsics = cams->intrinsicParams;
         }
     }
+    cv::Mat zeroDistCoeffs = cv::Mat::zeros(intrinsics.distortionCoef.size(), intrinsics.distortionCoef.type());
     if(relation==nullptr){
         std::string text = "No transform to world!";
         cv::Point position(this->resolution[0]/2, this->resolution[1]/2);
@@ -613,7 +614,7 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
         }
         std::vector<cv::Point2f> image_pts;
         cv::projectPoints(cam_axes_pts, cv::Vec3d(0,0,0), cv::Vec3d(0,0,0),
-                        intrinsics.intrinsicMatrix, intrinsics.distortionCoef,
+                        intrinsics.intrinsicMatrix, zeroDistCoeffs,
                         image_pts);
         cv::line(img, image_pts[0], image_pts[1], cv::Scalar(0,0,255), 1); // X - red
         cv::line(img, image_pts[0], image_pts[2], cv::Scalar(0,255,0), 1); // Y - green
@@ -632,14 +633,14 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
 
     std::vector<cv::Mat>poses;
     nlohmann::json dataArray = nlohmann::json::array();
-    cv::Mat zeroDistCoeffs = cv::Mat::zeros(intrinsics.distortionCoef.size(), intrinsics.distortionCoef.type());
+    
     for(int i=0;i<ids.size();i++){
         cv::Vec3d rvec, tvec;
         cv::solvePnP(objectPoints, corners[i],
                     intrinsics.intrinsicMatrix,
                     zeroDistCoeffs,
                     rvec, tvec);
-        cv::drawFrameAxes(img, intrinsics.intrinsicMatrix, intrinsics.distortionCoef, rvec, tvec, markerSize/2.0);
+        cv::drawFrameAxes(img, intrinsics.intrinsicMatrix, zeroDistCoeffs, rvec, tvec, markerSize/2.0);
         
 
         cv::Mat R;
