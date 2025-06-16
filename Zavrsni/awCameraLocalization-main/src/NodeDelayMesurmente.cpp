@@ -52,7 +52,7 @@ std::string NodeDelayMesurmente::getDescription(){
 }
 
 std::string NodeDelayMesurmente::getName(){
-    return "Node-delay-mesurmente";
+    return "Node-delay-measurment";
 }
 
 Enums::NodeType NodeDelayMesurmente::getType(){

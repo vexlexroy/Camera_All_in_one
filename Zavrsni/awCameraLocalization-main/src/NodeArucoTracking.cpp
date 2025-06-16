@@ -596,19 +596,41 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
     cv::Mat rT = revTransform(cv::Rect(0, 0, 3, 3)).clone();
     
     if(this->showWorld){
-        cv::Mat rvecT;
-        cv::Rodrigues(rT, rvecT); 
-        cv::drawFrameAxes(img, intrinsics.intrinsicMatrix, intrinsics.distortionCoef, rvecT, tvecT, markerSize*2, 1);
+        // cv::Mat rvecT;
+        // cv::Rodrigues(rT, rvecT); 
+        // cv::drawFrameAxes(img, intrinsics.intrinsicMatrix, intrinsics.distortionCoef, rvecT, tvecT, markerSize*2, 1);
+        std::vector<cv::Point3f> world_axes_pts = {
+        cv::Point3f(0, 0, 0),                      // origin
+        cv::Point3f(markerSize*2, 0, 0),                 // X axis
+        cv::Point3f(0, markerSize*2, 0),                 // Y axis
+        cv::Point3f(0, 0, markerSize*2)                  // Z axis
+        };
+        cv::Mat Rot = revTransform(cv::Rect(0,0,3,3)).clone();
+        cv::Mat tr = revTransform(cv::Rect(3,0,1,3)).clone();
+
+        std::vector<cv::Point3f> cam_axes_pts;
+        for (auto& pt : world_axes_pts) {
+            cv::Mat pt_mat = (cv::Mat_<double>(3,1) << pt.x, pt.y, pt.z);
+            cv::Mat pt_cam = Rot * pt_mat + tr;
+            cam_axes_pts.emplace_back(pt_cam.at<double>(0), pt_cam.at<double>(1), pt_cam.at<double>(2));
+        }
+        std::vector<cv::Point2f> image_pts;
+        cv::projectPoints(cam_axes_pts, cv::Vec3d(0,0,0), cv::Vec3d(0,0,0),
+                        intrinsics.intrinsicMatrix, intrinsics.distortionCoef,
+                        image_pts);
+        cv::line(img, image_pts[0], image_pts[1], cv::Scalar(0,0,255), 1); // X - red
+        cv::line(img, image_pts[0], image_pts[2], cv::Scalar(0,255,0), 1); // Y - green
+        cv::line(img, image_pts[0], image_pts[3], cv::Scalar(255,0,0), 1); // Z - blue
     }
     
 
     if(ids.empty()) return img; 
     
     std::vector<cv::Point3f> objectPoints = {
-        cv::Point3f(-markerSize/2.0f, markerSize/2.0f, 0),
-        cv::Point3f( markerSize/2.0f, markerSize/2.0f, 0), 
-        cv::Point3f( markerSize/2.0f,  -markerSize/2.0f, 0), 
-        cv::Point3f(-markerSize/2.0f,  -markerSize/2.0f, 0)  
+        cv::Point3f(-markerSize/2.0f, -markerSize/2.0f, 0),
+        cv::Point3f( markerSize/2.0f, -markerSize/2.0f, 0), 
+        cv::Point3f( markerSize/2.0f,  markerSize/2.0f, 0), 
+        cv::Point3f(-markerSize/2.0f,  markerSize/2.0f, 0)  
     };
 
     std::vector<cv::Mat>poses;
