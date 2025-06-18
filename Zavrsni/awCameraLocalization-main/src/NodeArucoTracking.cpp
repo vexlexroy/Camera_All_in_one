@@ -569,7 +569,8 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
         }
     }
     cv::Mat zeroDistCoeffs = cv::Mat::zeros(intrinsics.distortionCoef.size(), intrinsics.distortionCoef.type());
-    if(relation==nullptr){
+    // cv::Mat zeroDistCoeffs = intrinsics.distortionCoef;
+    if(relation==nullptr){ // ako nem a relacije
         std::string text = "No transform to world!";
         cv::Point position(this->resolution[0]/2, this->resolution[1]/2);
         int thickness = 2;
@@ -581,18 +582,18 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
     auto transform = relation->transformation_matrix.clone();
     transform.at<double>(0,3)*=relation->distance_between_cams_in_cm;
     transform.at<double>(1,3)*=relation->distance_between_cams_in_cm;
-    transform.at<double>(2,3)*=relation->distance_between_cams_in_cm;
-    auto translation = transform(cv::Rect(3, 0, 1, 3));
-    auto rotation = transform(cv::Rect(0, 0, 3, 3));
+    transform.at<double>(2,3)*=relation->distance_between_cams_in_cm; // postavlja konacnu matricu
+    // auto translation = transform(cv::Rect(3, 0, 1, 3));
+    // auto rotation = transform(cv::Rect(0, 0, 3, 3));
     
 
     std::vector<int> ids;
     std::vector<std::vector<cv::Point2f>> corners;
     cv::aruco::ArucoDetector detect;
     detect.setDictionary(this->arucoDictionary);
-    detect.detectMarkers(img, corners, ids);
+    detect.detectMarkers(img, corners, ids); // pixel poyicije rubova
 
-    cv::Mat revTransform = transform.clone().inv();
+    cv::Mat revTransform = transform.clone().inv(); //inverz transformacije
     cv::Mat tvecT = revTransform(cv::Rect(3, 0, 1, 3)).clone();
     cv::Mat rT = revTransform(cv::Rect(0, 0, 3, 3)).clone();
     
@@ -643,16 +644,31 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
         cv::drawFrameAxes(img, intrinsics.intrinsicMatrix, zeroDistCoeffs, rvec, tvec, markerSize/2.0);
         
 
-        cv::Mat R;
-        cv::Rodrigues(rvec, R);
-        cv::Mat pose = cv::Mat::eye(4, 4, CV_64F);
-        R.copyTo(pose(cv::Rect(0, 0, 3, 3)));
-        pose.at<double>(0, 3) = tvec[0];
-        pose.at<double>(1, 3) = tvec[1];
-        pose.at<double>(2, 3) = tvec[2];
+        // cv::Mat R;
+        // cv::Rodrigues(rvec, R);
+        // cv::Mat pose = cv::Mat::eye(4, 4, CV_64F);
+        // R.copyTo(pose(cv::Rect(0, 0, 3, 3)));
+        // pose.at<double>(0, 3) = tvec[0];
+        // pose.at<double>(1, 3) = tvec[1];
+        // pose.at<double>(2, 3) = tvec[2];
+        // cv::Mat tpose = transform*pose;
 
+        cv::Mat R_marker, t_marker;
+        cv::Rodrigues(rvec, R_marker);
+        t_marker = (cv::Mat_<double>(3,1) << tvec[0], tvec[1], tvec[2]);
+        // From transform (camera → world):
+        cv::Mat R_cam_to_world = transform(cv::Rect(0, 0, 3, 3)).clone();
+        cv::Mat t_cam_to_world = transform(cv::Rect(3, 0, 1, 3)).clone();
+        // Transform:
+        cv::Mat R_world = R_cam_to_world * R_marker;
+        cv::Mat t_world = R_cam_to_world * t_marker + t_cam_to_world;
+        // Build final 4x4:
+        cv::Mat tpose = cv::Mat::eye(4, 4, CV_64F);
+        R_world.copyTo(tpose(cv::Rect(0, 0, 3, 3)));
+        tpose.at<double>(0,3) = t_world.at<double>(0);
+        tpose.at<double>(1,3) = t_world.at<double>(1);
+        tpose.at<double>(2,3) = t_world.at<double>(2);
 
-        cv::Mat tpose = transform*pose;
 
         poses.push_back(tpose);
         // draw part
@@ -662,8 +678,8 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
         float z = tpose.at<double>(2,3);
         double yaw,roll,pitch;
         double qw,qx,qy,qz;
-        this->rotationMatrixToEulerAngles(tpose(cv::Rect(0, 0, 3, 3)),roll,pitch,yaw);
-        this->rotationMatrixToQuaternion(tpose(cv::Rect(0, 0, 3, 3)), qw,qx,qy,qz);
+        this->rotationMatrixToEulerAngles(tpose(cv::Rect(0, 0, 3, 3)).clone(),roll,pitch,yaw);
+        this->rotationMatrixToQuaternion(tpose(cv::Rect(0, 0, 3, 3)).clone(), qw,qx,qy,qz);
         if(this->showPositiontxt){
             std::stringstream ss_x, ss_y, ss_z, ss_roll, ss_pitch, ss_yaw;
             ss_x << "x: " << std::fixed << std::setprecision(1) << x << " ";

@@ -47,7 +47,7 @@ void Connection<T>::send(std::shared_ptr<MessageBase> msg){
     //Now put data to this->messageQueue, and trigger loop
 
     
-    while(this->messageQueue.size() > 2){ //FIX !
+    while(this->messageQueue.size() > 100){ //FIX !
         this->messageQueue.pop();
     }
     this->messageQueue.push(msg);
