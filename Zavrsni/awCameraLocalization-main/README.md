@@ -15,7 +15,7 @@ Build steps:
 2. vcpkg install (installes all necessery libraries in current folder, if done succesfully folder vcpkg_installed should be visible)
 3. cmake --preset=release  (create build files)
 4. cd build/release
-5. msbuild diplomski.sln /p:Configuration=Release /p:Platform=x64 (build project)
+5. msbuild diplomski.sln /p:Configuration=Release /p:Platform=x64 (build project) (in cmd for VS)
 6. .\Release\diplomski.exe (run project, if not working and missing some .dll files copy/paste all dlls from vcpkg_installed/x64-windows/bin)
 
 

@@ -2814,9 +2814,11 @@ void NodeManualExtrinsic::drawNodeWork(){
 void NodeManualExtrinsic::recieve(std::shared_ptr<MessageBase> message, int connectorId){
     std::shared_ptr<ConnectorBase> connector = this->getConnector(connectorId);
 
+
     if((connector->connectorMessageType == Enums::MessageType::PICTURE) && !this->isShiftPresed){
         std::shared_ptr<Message<std::shared_ptr<std::pair<cv::Mat, cv::Mat>>>> msg = std::dynamic_pointer_cast<Message<std::shared_ptr<std::pair<cv::Mat, cv::Mat>>>>(message);
-        
+        this->resolution[0] = msg->data->first.cols;
+        this->resolution[1] = msg->data->first.rows;
         if(msg->camOrigin->frameNickName == this->externalCalibrationPair.first)
         {
             //this->firstCamMsg = msg;
