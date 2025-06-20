@@ -18,5 +18,7 @@ Build steps:
 5. msbuild diplomski.sln /p:Configuration=Release /p:Platform=x64 (build project) (in cmd for VS)
 6. .\Release\diplomski.exe (run project, if not working and missing some .dll files copy/paste all dlls from vcpkg_installed/x64-windows/bin)
 
+7. ROS node for used to get UDP data from the program can be found on git (https://github.com/labust/brodic/tree/main/rosws/src/udp_aruco_receiver)
+
 
 

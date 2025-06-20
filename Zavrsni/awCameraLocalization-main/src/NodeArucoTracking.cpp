@@ -557,8 +557,13 @@ std::shared_ptr<FrameRelation> NodeArucoTracking::calculateExtrinsicForParametar
     GlobalParams::getInstance().addNewRelation(newRel);
     return newRel;
 }
-cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std::string worldFrame, std::vector<cv::Mat>& allposes, std::vector<int>& allids, nlohmann::json& jsonData){
+cv::Mat NodeArucoTracking::arucoPositions(cv::Mat imgin, std::string camframe, std::string worldFrame, std::vector<cv::Mat>& allposes, std::vector<int>& allids, nlohmann::json& jsonData){
     // printf("detecting A\n");
+    cv::Mat img;
+    cv::cvtColor(imgin, img, cv::COLOR_BGR2GRAY);
+    // img.convertTo(img,-1,2,0.0); // kontrast
+    // cv::edgePreservingFilter(img, img, 1, 10, 0.3); // good for markers (Bad performance imapact)
+
     auto relation = this->calculateExtrinsicForParametars(camframe, worldFrame);
     // printf("relation calc\n");
     auto frames = GlobalParams::getInstance().getCamFrames();
@@ -576,8 +581,8 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
         int thickness = 2;
         cv::Scalar color(0, 0, 255);
         int fontFace = cv::FONT_HERSHEY_SIMPLEX;
-        cv::putText(img, text, position, fontFace, this->fontsize, color, thickness);
-        return img;
+        cv::putText(imgin, text, position, fontFace, this->fontsize, color, thickness);
+        return imgin;
     }
     auto transform = relation->transformation_matrix.clone();
     transform.at<double>(0,3)*=relation->distance_between_cams_in_cm;
@@ -590,9 +595,16 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
     std::vector<int> ids;
     std::vector<std::vector<cv::Point2f>> corners;
     cv::aruco::ArucoDetector detect;
+    cv::aruco::DetectorParameters parms;
+    parms.cornerRefinementMethod=cv::aruco::CORNER_REFINE_APRILTAG;
+    parms.cornerRefinementWinSize = 6;   // Size of search window
+    parms.cornerRefinementMaxIterations = 50;
+    parms.cornerRefinementMinAccuracy = 0.05;
     detect.setDictionary(this->arucoDictionary);
+    detect.setDetectorParameters(parms);
     detect.detectMarkers(img, corners, ids); // pixel poyicije rubova
 
+    cv::aruco::drawDetectedMarkers(imgin,corners,ids);
     cv::Mat revTransform = transform.clone().inv(); //inverz transformacije
     cv::Mat tvecT = revTransform(cv::Rect(3, 0, 1, 3)).clone();
     cv::Mat rT = revTransform(cv::Rect(0, 0, 3, 3)).clone();
@@ -617,9 +629,9 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
         cv::projectPoints(cam_axes_pts, cv::Vec3d(0,0,0), cv::Vec3d(0,0,0),
                         intrinsics.intrinsicMatrix, zeroDistCoeffs,
                         image_pts);
-        cv::line(img, image_pts[0], image_pts[1], cv::Scalar(0,0,255), 1); // X - red
-        cv::line(img, image_pts[0], image_pts[2], cv::Scalar(0,255,0), 1); // Y - green
-        cv::line(img, image_pts[0], image_pts[3], cv::Scalar(255,0,0), 1); // Z - blue
+        cv::line(imgin, image_pts[0], image_pts[1], cv::Scalar(0,0,255), 1); // X - red
+        cv::line(imgin, image_pts[0], image_pts[2], cv::Scalar(0,255,0), 1); // Y - green
+        cv::line(imgin, image_pts[0], image_pts[3], cv::Scalar(255,0,0), 1); // Z - blue
     }
     
 
@@ -640,34 +652,35 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
         cv::solvePnP(objectPoints, corners[i],
                     intrinsics.intrinsicMatrix,
                     zeroDistCoeffs,
-                    rvec, tvec);
-        cv::drawFrameAxes(img, intrinsics.intrinsicMatrix, zeroDistCoeffs, rvec, tvec, markerSize/2.0);
+                    rvec, tvec, true,
+                cv::SOLVEPNP_IPPE_SQUARE);
+        cv::drawFrameAxes(imgin, intrinsics.intrinsicMatrix, zeroDistCoeffs, rvec, tvec, markerSize/2.0, 1);
         
 
-        // cv::Mat R;
-        // cv::Rodrigues(rvec, R);
-        // cv::Mat pose = cv::Mat::eye(4, 4, CV_64F);
-        // R.copyTo(pose(cv::Rect(0, 0, 3, 3)));
-        // pose.at<double>(0, 3) = tvec[0];
-        // pose.at<double>(1, 3) = tvec[1];
-        // pose.at<double>(2, 3) = tvec[2];
-        // cv::Mat tpose = transform*pose;
+        cv::Mat R;
+        cv::Rodrigues(rvec, R);
+        cv::Mat pose = cv::Mat::eye(4, 4, CV_64F);
+        R.copyTo(pose(cv::Rect(0, 0, 3, 3)));
+        pose.at<double>(0, 3) = tvec[0];
+        pose.at<double>(1, 3) = tvec[1];
+        pose.at<double>(2, 3) = tvec[2];
+        cv::Mat tpose = transform*pose;
 
-        cv::Mat R_marker, t_marker;
-        cv::Rodrigues(rvec, R_marker);
-        t_marker = (cv::Mat_<double>(3,1) << tvec[0], tvec[1], tvec[2]);
-        // From transform (camera → world):
-        cv::Mat R_cam_to_world = transform(cv::Rect(0, 0, 3, 3)).clone();
-        cv::Mat t_cam_to_world = transform(cv::Rect(3, 0, 1, 3)).clone();
-        // Transform:
-        cv::Mat R_world = R_cam_to_world * R_marker;
-        cv::Mat t_world = R_cam_to_world * t_marker + t_cam_to_world;
+        // cv::Mat R_marker, t_marker;
+        // cv::Rodrigues(rvec, R_marker);
+        // t_marker = (cv::Mat_<double>(3,1) << tvec[0], tvec[1], tvec[2]);
+        // // From transform (camera → world):
+        // cv::Mat R_cam_to_world = transform(cv::Rect(0, 0, 3, 3)).clone();
+        // cv::Mat t_cam_to_world = transform(cv::Rect(3, 0, 1, 3)).clone();
+        // // Transform:
+        // cv::Mat R_world = R_cam_to_world * R_marker;
+        // cv::Mat t_world = R_cam_to_world * t_marker + t_cam_to_world;
         // Build final 4x4:
-        cv::Mat tpose = cv::Mat::eye(4, 4, CV_64F);
-        R_world.copyTo(tpose(cv::Rect(0, 0, 3, 3)));
-        tpose.at<double>(0,3) = t_world.at<double>(0);
-        tpose.at<double>(1,3) = t_world.at<double>(1);
-        tpose.at<double>(2,3) = t_world.at<double>(2);
+        // cv::Mat tpose = cv::Mat::eye(4, 4, CV_64F);
+        // R_world.copyTo(tpose(cv::Rect(0, 0, 3, 3)));
+        // tpose.at<double>(0,3) = t_world.at<double>(0);
+        // tpose.at<double>(1,3) = t_world.at<double>(1);
+        // tpose.at<double>(2,3) = t_world.at<double>(2);
 
 
         poses.push_back(tpose);
@@ -695,14 +708,14 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
             cv::Size textSize = cv::getTextSize("Test", fontFace, this->fontsize, thickness, &baseline);
             int lineHeight = textSize.height + 5;
             int x_offset = 0;
-            drawColoredSegment(img, ss_x.str(), cv::Scalar(0, 0, 255), position, this->fontsize, thickness, &x_offset);  // Red
-            drawColoredSegment(img, ss_y.str(), cv::Scalar(0, 255, 0), position, this->fontsize, thickness, &x_offset);  // Green
-            drawColoredSegment(img, ss_z.str(), cv::Scalar(255, 0, 0), position, this->fontsize, thickness, &x_offset);   // Blue
+            drawColoredSegment(imgin, ss_x.str(), cv::Scalar(0, 0, 255), position, this->fontsize, thickness, &x_offset);  // Red
+            drawColoredSegment(imgin, ss_y.str(), cv::Scalar(0, 255, 0), position, this->fontsize, thickness, &x_offset);  // Green
+            drawColoredSegment(imgin, ss_z.str(), cv::Scalar(255, 0, 0), position, this->fontsize, thickness, &x_offset);   // Blue
             x_offset = 0;
             cv::Point rotationPosition(position.x, position.y + lineHeight);
-            drawColoredSegment(img, ss_roll.str(), cv::Scalar(0, 0, 255), rotationPosition, this->fontsize, thickness, &x_offset);  // Red
-            drawColoredSegment(img, ss_pitch.str(), cv::Scalar(0, 255, 0), rotationPosition, this->fontsize, thickness, &x_offset);  // Green
-            drawColoredSegment(img, ss_yaw.str(), cv::Scalar(255, 0, 0), rotationPosition, this->fontsize, thickness, &x_offset);     // Blue
+            drawColoredSegment(imgin, ss_roll.str(), cv::Scalar(0, 0, 255), rotationPosition, this->fontsize, thickness, &x_offset);  // Red
+            drawColoredSegment(imgin, ss_pitch.str(), cv::Scalar(0, 255, 0), rotationPosition, this->fontsize, thickness, &x_offset);  // Green
+            drawColoredSegment(imgin, ss_yaw.str(), cv::Scalar(255, 0, 0), rotationPosition, this->fontsize, thickness, &x_offset);     // Blue
         }
         nlohmann::json markerData;
         markerData["id"] = id;
@@ -723,7 +736,7 @@ cv::Mat NodeArucoTracking::arucoPositions(cv::Mat img, std::string camframe, std
     allids=ids;
     allposes=poses;
     jsonData=dataArray;
-    return img;
+    return imgin;
     
     
 }// finds aruco marker on image and draws position and rotation on image

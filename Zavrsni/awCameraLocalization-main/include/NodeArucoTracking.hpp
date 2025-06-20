@@ -7,6 +7,7 @@
 #include <glad/glad.h>
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/matx.hpp>
+#include <opencv2/imgproc.hpp>
 #include <imgui.h>
 #include <nlohmann/json.hpp>
 #include <boost/asio.hpp>
@@ -34,6 +35,8 @@ public:
     cv::aruco::Dictionary arucoDictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_4X4_50);
     float markerSize = 3.8; //cm
     float fontsize = 0.8;
+    cv::TermCriteria termcrit = cv::TermCriteria(cv::TermCriteria::EPS + cv::TermCriteria::MAX_ITER, 30, 0.1);
+    cv::Size winSize = cv::Size(5, 5); // Window size for subpixel search
     //UDP comunication
     boost::asio::io_context asio_io;
     std::unique_ptr<boost::asio::ip::udp::socket> socket;
