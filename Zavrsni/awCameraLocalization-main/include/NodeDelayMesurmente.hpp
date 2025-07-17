@@ -53,7 +53,7 @@ public:
     int roiy[2] = {0,480};
     int area[2] = {300, 400}; //area of blob to be detected
     int maxTime = 5000; // time witch stops delay test in ms
-    int timeOut = 10000; // time witch stops test if no msg from arduino comes
+    int timeOut = 6000; // time witch stops test if no msg from arduino comes
 
     bool roiSelected = false;
     bool roiOn = false;

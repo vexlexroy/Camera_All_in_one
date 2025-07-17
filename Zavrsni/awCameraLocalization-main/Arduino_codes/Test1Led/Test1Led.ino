@@ -20,7 +20,7 @@ void loop() {
     }
 
     if(incomingMessage == "TEST"){
-      delay(100);
+      delay(200);
       digitalWrite(LED_PIN, HIGH);
       Serial.println("LEDON\n");
     }

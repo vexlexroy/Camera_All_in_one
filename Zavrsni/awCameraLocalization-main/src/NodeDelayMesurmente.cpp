@@ -474,9 +474,9 @@ void NodeDelayMesurmente::recieve(std::shared_ptr<MessageBase> message, int conn
     std::shared_ptr<ConnectorBase> connector = this->getConnector(connectorId);
 
     if(connector->connectorMessageType == Enums::MessageType::INT){
-        if(this->syncedTest && !this->initiator) {this->startTest = true; this->freetotest=true;}
-        if(this->syncedTest && this->initiator) this->freetotest = true;
-
+        if(this->syncedTest && !this->initiator) {this->freetotest=true; Util::delay(2000); this->startTest = true;}
+        if(this->syncedTest && this->initiator) Util::delay(2000); this->freetotest = true;
+        return;
     }
 
     this->LastMessage = message;
@@ -486,7 +486,7 @@ void NodeDelayMesurmente::recieve(std::shared_ptr<MessageBase> message, int conn
         
         
         this->mutex.lock();
-        if(this->startTest && !this->isConnected()){
+        if(this->startTest && !this->isConnected() && (this->freetotest || !this->syncedTest)){
             this->connect(this->port,this->baudRate);
         }
         this->mutex.unlock();
@@ -553,7 +553,7 @@ void NodeDelayMesurmente::recieve(std::shared_ptr<MessageBase> message, int conn
                 this->test_timer=NULL;
             }
         }
-        else if (this->isPeriodicTest){
+        else if (this->isPeriodicTest && !this->startTest){
             if (this->test_timer==NULL) this->test_timer = Util::timeSinceEpochMicroseconds();
             else{
                 long long int cTime=Util::timeSinceEpochMicroseconds();
@@ -628,16 +628,14 @@ bool NodeDelayMesurmente::testDelay(cv::Mat image){
             this->isTesting=false;
             this->startTest=false;
             printf("Time limit (No Detection in %d ms)!!!", this->maxTime);
-            // this->disconnect();
             this->lastDelay=-1;
             return true;
         }
         else
         if(count>this->lastBlobCount){
             this->isTesting=false;
-            // this->startTest=false;
+            this->startTest=false;
             this->lastDelay=delay;
-            // this->ledOn=false;
             return true;
         }
     }
@@ -649,26 +647,17 @@ void NodeDelayMesurmente::initiateTest(cv::Mat image){
     if(this->sentRequest){
         if(this->response){
             bool test = this->testDelay(image);
-            if(test && this->useAvg){ //will not happen wasnt implemented. always false
-                this->last_Delays[this->numOfftests]=this->lastDelay;
-                this->numOfftests++;
-                if(this->numOfftests<sizeof(this->last_Delays)/sizeof(last_Delays[0])){
-                    this->sentRequest = false;
-                    // this->startTest = false;
-                    this->response = false;
-                    this->ledOn=false;
-                    return;
-
+            if(!this->isTesting){
+                this->sentRequest = false;
+                this->startTest = false;
+                this->response = false;
+                this->ledOn=false;
+                if(this->syncedTest){
+                    this->freetotest = false;
                 }
-                else{
-                    int sum=0;
-                    for (int i=0;i<numOfftests;++i){
-                        sum=sum+this->last_Delays[i];
-                    }
-                    this->lastAvgDelay=sum/numOfftests;
-                    this->numOfftests=0;
-                }
-            }else if(test){ //send delay to connector TODO
+                this->disconnect();
+            } 
+            if(test){ //send delay to connector TODO
                 std::shared_ptr<Message<int>> delayMsg = std::make_shared<Message<int>>(Enums::MessageType::INT,std::static_pointer_cast<MessageBase>(this->LastMessage));
                 delayMsg->data = this->lastDelay;
                 for(auto& connector : this->connectors) {
@@ -678,17 +667,7 @@ void NodeDelayMesurmente::initiateTest(cv::Mat image){
                     }
                 }  
             }
-            if(!this->isTesting){
-                this->sentRequest = false;
-                this->startTest = false;
-                this->response = false;
-                this->ledOn=false;
-                this->disconnect();
-                if(this->syncedTest){
-                    this->freetotest = false;
-                }
-                // Util::delay(20);
-            }
+            
         }
         else{
             if(this->readData()){
@@ -701,10 +680,10 @@ void NodeDelayMesurmente::initiateTest(cv::Mat image){
                     this->startTest = false;
                     this->response = false;
                     printf("Timed Out (No Response in %d ms)!!!",this->timeOut);
-                    this->disconnect();
                     if(this->syncedTest){
                         this->freetotest = false;
                     }
+                    this->disconnect();
                 }
             }
         }
@@ -730,12 +709,13 @@ bool NodeDelayMesurmente::connect(std::string port, unsigned int baud) {
     try {
         this->serial = std::make_unique<boost::asio::serial_port>(this->io, port);
         this->serial->set_option(boost::asio::serial_port_base::baud_rate(baud));
+        Util::delay(10);
         std::cout << "Connected to " << port << " at " << baud << " baud." << std::endl;
         return true;
     } catch (const boost::system::system_error& e) {
         std::cerr << "Error connecting to serial port: " << e.what() << std::endl;
         this->serial.reset();
-        // Util::delay(150);
+        Util::delay(150);
         return false;
     }
 }
@@ -743,24 +723,15 @@ bool NodeDelayMesurmente::connect(std::string port, unsigned int baud) {
 void NodeDelayMesurmente::disconnect() {
     if (this->serial && this->serial->is_open()) {
         this->serial->close();
+        Util::delay(10);
         std::cout << "Serial port disconnected." << std::endl;
     }
     this->serial.reset();
+    // Util::delay(150);
 }
 
 bool NodeDelayMesurmente::isConnected(){
     return this->serial && this->serial->is_open();
-}
-
-bool NodeDelayMesurmente::isPortAvailable(std::string port) {
-    try {
-        boost::asio::io_context io;
-        boost::asio::serial_port test_port(io);
-        test_port.open(port);
-        return false; // If open succeeds, port is in use
-    } catch (...) {
-        return true; // Port is available
-    }
 }
 
 void NodeDelayMesurmente::sendData(std::string data) {
